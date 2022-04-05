@@ -12,6 +12,7 @@
  20-Dec-2021 - Current version V1.0.2
  01-Jan-2022 - Current version V1.0.3
  22-Feb-2022 - Current version V1.0.4
+ 04-Apr-2022 - Current version V1.0.5
     
  .NOTES
  Dec 2021
@@ -23,6 +24,12 @@
  
  Feb 2022 
  * (Lin) Fix recursive_bracket_parser function to handle "#" marks.
+ 
+ Apr 2022 
+ * (Win) Print the MSDSM output data 
+ * (Win) Print the iSCSI Adapter/s output data 
+ * (Win) Improve the query of Silk disks in "Load Balance and Failover Policy for Individual Volumes" section
+
 #>
 
 # Ensure the minimum version of the PowerShell Validator is 5 and above
@@ -480,6 +487,16 @@ function Windows_Validator {
 					handle_string_array_messages $MPIO_out "Data"
 
 					# Checking the MSDSM supported hardware list
+					$MSDSMSupportedHW_out = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW})
+					$MSDSMSupportedHW_out = ($MSDSMSupportedHW_out | Format-Table -AutoSize | Out-String).Trim()
+
+					# Print the MPIO Settings
+					InfoMessage "MSDSM supported hardware list Section :"
+
+					# Print the MPIO into the html
+					handle_string_array_messages $MSDSMSupportedHW_out "Data"
+
+					# Checking the MSDSM supported hardware list
 					$MSDSMSupportedHW = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW -VendorId MSFT2005 -ProductId iSCSIBusType_0x9})
 					if ($MSDSMSupportedHW) {
 						GoodMessage "MPIO DSM value is properly configured according to Silk's BP"
@@ -576,19 +593,29 @@ function Windows_Validator {
 
 				# Load Balance and Failover Policy for Individual Volumes
 				InfoMessage "$MessageCounter - Running validation for Load Balance and Failover Policy for Individual Volumes"
-				$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {$_.FriendlyName -match "KMNRIO KDP"} | Sort-Object DeviceID | `
-				Select-object SerialNumber,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}},`
-				@{N="LoadBalancePolicy";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object LoadBalancePolicy).LoadBalancePolicy}})})
+				$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO KDP") -OR ($_.FriendlyName -match "SILK KDP") -OR ($_.FriendlyName -match "SILK SDP")} | Sort-Object DeviceID | `
+				Select-object DeviceId,SerialNumber,@{N="LoadBalancePolicy";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object LoadBalancePolicy).LoadBalancePolicy}}, `
+				CanPool,OperationalStatus,HealthStatus,@{Name="Size, Gb"; Expression={$_.Size/1Gb}},@{N="DriveLetter";E={($_ | Get-Disk | Get-Partition | Where-Object {$_.DriveLetter}).DriveLetter}}, `
+				@{N="DiskStatus";E={($_ | Get-Disk | select-object OperationalStatus).OperationalStatus}},@{N="PartitionStyle";E={($_ | Get-Disk | select-object PartitionStyle).PartitionStyle}})})
 
 				# Check the PD count 
 				if($Server_KMNRIO_PD) {
+
+					# Print the MPIO Settings
+					InfoMessage "Silk Disks Settings Section :"
+					$Server_KMNRIO_PD_out = ($Server_KMNRIO_PD | Format-Table -AutoSize | Out-String).Trim() 
+
+					# Print the MPIO into the html
+					handle_string_array_messages $Server_KMNRIO_PD_out "Data"
+
+					# Run over the disks and verify that each disk is with LQD
 					foreach ($PD_Temp in $Server_KMNRIO_PD)	{
 						# Check for each Individual if it LQD or not
-						if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth")	{
-							GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+						if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth") {
+							GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
 						}
 						else {
-							BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)" 
+							BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)" 
 						}
 					}
 				}
@@ -643,7 +670,7 @@ function Windows_Validator {
 				$MessageCounter++
 				PrintDelimiter
 
-				InfoMessage "$MessageCounter - Running validation for Network Adapter" 
+				InfoMessage "$MessageCounter - Running validation for Network Adapter/s" 
 				# Get the silk iSCSI Sessions
 				$NetAdapters = Get-NetAdapter -CIMsession $CIMsession
 				if($NetAdapters) {
@@ -651,6 +678,43 @@ function Windows_Validator {
 				}
 				else {
 					InfoMessage "Could not get the network adapters"
+				}
+
+				$MessageCounter++
+				PrintDelimiter
+				
+				InfoMessage "$MessageCounter - Running validation for iSCSI Network Adapter/s" 
+				# Get the silk iSCSI Sessions
+				if($MSiSCSI) {
+					if (($MSiSCSI.State -match "Running") -And ($MSiSCSI.Status -match "OK"))
+					{
+						$iscsieth = invoke-Command -Session $pssessions -ScriptBlock {(Get-IscsiTargetPortal).InitiatorPortalAddress | Sort-Object -Unique}
+						if(!$iscsieth) {
+							WarningMessage "Could not find active iSCSI Network Adapters"
+						}
+						else {
+							# Run over the ISCSI network card
+							foreach($iscsiadapter in $iscsieth)
+							{
+								# For each ISCSI netork card get his properies
+								$iscsinetadapter                 = invoke-Command -Session $pssessions -Args $iscsiadapter -ScriptBlock {(Get-NetIPAddress -IPAddress $args[0]).InterfaceAlias}
+								$iscsinetadapteradvancedproperty = invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])}
+								
+								# Write that we are working on iscsinetadapter
+								InfoMessage "Checking full setings for iSCSI Adapter - $($iscsinetadapter)"
+
+								$iscsinetadapteradvancedproperty_out = ($iscsinetadapteradvancedproperty | Format-table -AutoSize| Out-String).Trim()
+								# Print the MPIO into the html
+								handle_string_array_messages $iscsinetadapteradvancedproperty_out "Data"
+							}
+						}
+					}
+					else {
+						BadMessage "The MSiSCSI service has not been started, could not check iSCSI Network Adapters"
+					}
+				}
+				else { 
+					BadMessage "iSCSI service not found"
 				}
 
 				PrintDelimiter
