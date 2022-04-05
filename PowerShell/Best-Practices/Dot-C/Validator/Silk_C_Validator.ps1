@@ -38,7 +38,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "1.0.4"
+[string]$SDP_Version = "1.0.5"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "DotC"
