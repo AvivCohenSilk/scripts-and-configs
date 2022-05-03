@@ -593,7 +593,7 @@ function Windows_Validator {
 
 				# Load Balance and Failover Policy for Individual Volumes
 				InfoMessage "$MessageCounter - Running validation for Load Balance and Failover Policy for Individual Volumes"
-				$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO KDP") -OR ($_.FriendlyName -match "SILK KDP") -OR ($_.FriendlyName -match "SILK SDP")} | Sort-Object DeviceID | `
+				$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO KDP") -OR ($_.FriendlyName -match "KMNRIO SDP") -OR ($_.FriendlyName -match "SILK KDP") -OR ($_.FriendlyName -match "SILK SDP")} | Sort-Object DeviceID | `
 				Select-object DeviceId,SerialNumber,FriendlyName,@{N="LoadBalancePolicy";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object LoadBalancePolicy).LoadBalancePolicy}}, `
 				CanPool,OperationalStatus,HealthStatus,@{Name="Size, Gb"; Expression={$_.Size/1Gb}},@{N="DriveLetter";E={($_ | Get-Disk | Get-Partition | Where-Object {$_.DriveLetter}).DriveLetter}}, `
 				@{N="DiskStatus";E={($_ | Get-Disk | select-object OperationalStatus).OperationalStatus}},@{N="PartitionStyle";E={($_ | Get-Disk | select-object PartitionStyle).PartitionStyle}})})
