@@ -14,10 +14,15 @@
   Jan-2022 - Current version V2.1.0
   Feb-2022 - Current version V2.1.1
   Mar-2022 - Current version V2.2.0
+  Mar-2022 - Current version V2.2.1
     
  .NOTES  
   Mar 2022
   * (Lin) Fix Fix Multipath.conf and udev rules create from Windows/Linux OS. 	
+
+  May 2022
+  * (Win) Checking and Validate the CTRL LU
+  * (ESX) Fix the SATP pspoption to support policy options
 #>
 
 <#
@@ -37,7 +42,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Validator begin of the script - Activator #####################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.2.0"
+[string]$SDP_Version = "2.2.1"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "Dot6"
@@ -720,7 +725,7 @@ function VMware_Activator {
 						# Create the new SATP rule+
 						$esxcli    = Get-EsxCli -VMHost $vmhost -V2
 						$arguments = $esxcli.storage.nmp.satp.rule.add.CreateArgs()
-						$arguments.pspoption   = "iops=2"
+						$arguments.pspoption   = "iops=2"						
 						$arguments.description = "Kaminario K2 Active/Active"
 						$arguments.vendor      = "KMNRIO"
 						$arguments.satp        = "VMW_SATP_DEFAULT_AA"
@@ -958,6 +963,10 @@ function Windows_Activator {
 				PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: Disk Load Balance Policy Settings.`nDescription: Setting the Silk Disks Load Balance Policy to Least Queue Depth (LQD)" 
 				$MPIO_LoadBalancePolicy = UserSelections "MPIO " "Disk Load Balance Policy (LQD)"
 
+				# Settings CTRL Silk Disk OFFLINE
+				PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets" 
+				$CTRL_LU_Offline = UserSelections "Management Lugical Unit" "CTRL Silk Disk"
+
 				# Defragmentation Scheduled Task
 				PrintDescription "Category: Performance related.`nParameter type: Disablie Disk Defragmentation Scheduled Task.`nDescription: In a Windows, Hyperv and even Windows server run as a virtual Machine on ESX environments, it is recommended to Disable Disk Fragmentation Scheduled Task (ScheduledDefrag) to avoid performance issues"
 				$Defragmentation = UserSelections "Defragmentation" "Disable Scheduled Task"
@@ -1109,11 +1118,11 @@ function Windows_Activator {
 								$iscsinetadapter                 = invoke-Command -Session $pssessions -Args $iscsiadapter -ScriptBlock {(Get-NetIPAddress -IPAddress $args[0]).InterfaceAlias}
 								$iscsinetadapteradvancedproperty = invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])}
 								
-								$confirmation = Read-Host "configuring iSCSI network Adapter $iscsinetadapter. Are you Sure You Want To Proceed [y/n] (This will restart the network card and will cause several disonnects)"
+								$confirmation = Read-Host "configuring iSCSI network Adapter $iscsinetadapter. Are you Sure You Want To Proceed [Yy/Nn] (Default [Nn],This will restart the network card and will cause several disonnects)"
 								
 								if ($confirmation -match "[yY]") {	
 									# Jambo Property section
-									$iSCSI_jumbo = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "jumbo"})
+									$iSCSI_jumbo = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Jumbo Packet"})
 									if($iSCSI_jumbo) {
 										if ($iSCSI_jumbo.RegistryValue -match "9014") {
 											GoodMessage "iSCSI network adapter $iscsinetadapter Jumbo Packet is properly configured according to Silk's BP"
@@ -1123,7 +1132,7 @@ function Windows_Activator {
 											Set-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter -displayname $($iSCSI_jumbo.DisplayName) -RegistryValue "9014" | Out-Null
 											
 											$iscsinetadapteradvancedproperty = (invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])})
-											$iSCSI_jumbo = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "jumbo"})
+											$iSCSI_jumbo = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Jumbo Packet"})
 											if ($iSCSI_jumbo.RegistryValue -match "9014") {
 												GoodMessage "iSCSI network adapter $iscsinetadapter is set to Jumbo Packet"
 											}
@@ -1137,7 +1146,7 @@ function Windows_Activator {
 									}
 									
 									# Flow Property section
-									$iSCSI_flow = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "flow"})
+									$iSCSI_flow = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Flow Control"})
 									if($iSCSI_flow) {
 										if ($iSCSI_flow.DisplayValue -match "Rx & Tx Enabled") {
 											GoodMessage "iSCSI network adapter $iscsinetadapter Flow Control is properly configured according to Silk's BP"
@@ -1147,7 +1156,7 @@ function Windows_Activator {
 											set-NetAdapterAdvancedProperty -CimSession $CIMsession -name $iscsinetadapter -DisplayName $($iSCSI_flow.DisplayName) -DisplayValue  "Rx & Tx Enabled" | Out-Null
 											
 											$iscsinetadapteradvancedproperty = (invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])})
-											$iSCSI_flow = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "flow"})
+											$iSCSI_flow = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Flow Control"})
 											if ($iSCSI_flow.DisplayValue -match "Rx & Tx Enabled") {
 												GoodMessage "Flow Control is enabled iSCSI network adapter $iscsinetadapter"
 											}
@@ -1161,7 +1170,7 @@ function Windows_Activator {
 									}
 									
 									# duplex Property section
-									$iSCSI_duplex = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "duplex"})
+									$iSCSI_duplex = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Speed & Duplex"})
 									if($iSCSI_duplex) {
 										if ($iSCSI_duplex.DisplayValue -match "10 Gbps Full Duplex") {
 											GoodMessage "iSCSI network adapter $iscsinetadapter speed and duplex is properly configured according to Silk's BP"
@@ -1171,7 +1180,7 @@ function Windows_Activator {
 											set-NetAdapterAdvancedProperty -CimSession $CIMsession -name $iscsinetadapter -DisplayName $($iSCSI_duplex.DisplayName) -DisplayValue  "10 Gbps Full Duplex" | Out-Null
 											
 											$iscsinetadapteradvancedproperty = (invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])})
-											$iSCSI_duplex = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "duplex"})
+											$iSCSI_duplex = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Speed & Duplex"})
 											if ($iSCSI_duplex.DisplayValue -match "10 Gbps Full Duplex") {
 												GoodMessage "iSCSI network adapter $iscsinetadapter speed and duplex is set to 10 Gbps Full Duplex"
 											}
@@ -1185,17 +1194,17 @@ function Windows_Activator {
 									}
 									
 									# Disabling RSS on iscsi adapters
-									$iSCSI_side_scaling = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "side scaling"})
+									$iSCSI_side_scaling = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Receive Side Scaling"})
 									if($iSCSI_side_scaling) {
 										if ($iSCSI_side_scaling.DisplayValue -match "Disabled") {
-											GoodMessage "iSCSI network adapter $iscsinetadapter Receive Side Scaling  is properly configured according to Silk's BP"
+											GoodMessage "iSCSI network adapter $iscsinetadapter Receive Side Scaling is properly configured according to Silk's BP"
 										}
 										else {
 											InfoMessage "Disabling RSS on iSCSI network Adapters $iscsinetadapter"
 											Disable-NetAdapterRss -CimSession $CIMsession -name $iscsinetadapter -NoRestart |Out-Null
 											
 											$iscsinetadapteradvancedproperty = (invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])})
-											$iSCSI_side_scaling = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "side scaling"})
+											$iSCSI_side_scaling = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Receive Side Scaling"})
 											if ($iSCSI_side_scaling.DisplayValue -match "Disabled") {
 												GoodMessage "iSCSI network adapter $iscsinetadapter Receive Side Scaling is properly configured according to Silk's BP"
 											}
@@ -1531,13 +1540,13 @@ function Windows_Activator {
 					if($mpclaim_installed) {
 						# Load Balance and Failover Policy for Individual Volumes
 						$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO K2") -OR ($_.FriendlyName -match "SILK K2") -OR ($_.FriendlyName -match "SILK SDP")} | Sort-Object DeviceID | `
-						Select-object SerialNumber,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}},`
+						Select-object SerialNumber,UniqueId,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}},`
 						@{N="LoadBalancePolicy";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object LoadBalancePolicy).LoadBalancePolicy}})})
 
 						# Check the PD count 
 						if($Server_KMNRIO_PD) {
 							# Write the disk list before changing
-							handle_string_array_messages ($Server_KMNRIO_PD | format-table -autosize | Out-String).trim() "Data"
+							handle_string_array_messages ($Server_KMNRIO_PD | format-table * | Out-String).trim() "Data"
 
 							foreach ($PD_Temp in $Server_KMNRIO_PD)	{
 								# Check for each Individual if it LQD or not
@@ -1568,7 +1577,48 @@ function Windows_Activator {
 				}
 
 				$MessageCounter++
-				PrintDelimiter 
+				PrintDelimiter
+
+				if($CTRL_LU_Offline) {
+					InfoMessage "$MessageCounter - Running Activiation for CTRL Silk Disk"
+
+					# Checking if the mpclaim found (if not -> mean that MPIO is not installed)
+					$mpclaim_installed = (invoke-Command -Session $pssessions -ScriptBlock {Get-Command mpclaim.exe})
+					if($mpclaim_installed) {
+						
+						# Load Balance and Failover Policy for Individual Volumes
+						$Server_KMNRIO_PD_CTRL = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO K2") -OR ($_.FriendlyName -match "SILK K2") -OR ($_.FriendlyName -match "SILK SDP")} | `
+						Where-Object {$_.SerialNumber.EndsWith(0000)} | Sort-Object DeviceID | Select-object SerialNumber,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}}, `
+						@{N="DiskStatus";E={($_ | Get-Disk | select-object OperationalStatus).OperationalStatus}})})
+
+						if($Server_KMNRIO_PD_CTRL) {
+							# Run over the CTRL disks and verify that each disk is Offline
+							foreach ($PD_Temp in $Server_KMNRIO_PD_CTRL) {
+								# Check for each Individual if it offline or not
+								if ($PD_Temp.DiskStatus -match "Offline") {
+									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
+								}
+								else {
+									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
+									(invoke-Command -Session $pssessions -Args $PD_Temp -ScriptBlock {Get-Disk -SerialNumber $args[0].SerialNumber | Where-Object IsOffline -Eq $False | Set-Disk -IsOffline $True})
+									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
+								}
+							}
+						}
+						else {
+							InfoMessage "No CTRL SILK SDP Disks found on the server"
+						}
+					}
+					else {
+						BadMessage "The mpclaim.exe not found. Check if MPIO Installed and Enabled"
+					}
+				}
+				else{
+					InfoMessage "$MessageCounter - Skipping CTRL Silk Disk Settings"
+				}
+
+				$MessageCounter++
+				PrintDelimiter
 
 				# Defragmentation Task - NEW
 				if($Defragmentation) {

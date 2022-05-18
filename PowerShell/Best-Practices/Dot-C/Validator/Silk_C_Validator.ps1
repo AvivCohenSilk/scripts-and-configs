@@ -13,6 +13,7 @@
  01-Jan-2022 - Current version V1.0.3
  22-Feb-2022 - Current version V1.0.4
  04-Apr-2022 - Current version V1.0.5
+ 11-May-2022 - Current version V1.0.6
     
  .NOTES
  Dec 2021
@@ -30,6 +31,9 @@
  * (Win) Print the iSCSI Adapter/s output data 
  * (Win) Improve the query of Silk disks in "Load Balance and Failover Policy for Individual Volumes" section
 
+ May 2022
+* (Win) Checking and Validate the CTRL LU
+
 #>
 
 # Ensure the minimum version of the PowerShell Validator is 5 and above
@@ -38,7 +42,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "1.0.5"
+[string]$SDP_Version = "1.0.6"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "DotC"
@@ -310,7 +314,7 @@ function Windows_Validator {
 		}
 
 		if ($returnArray) {
-			return $returnArray | Format-Table
+			return $returnArray | Format-Table *
 		} else {
 			return $null
 		}
@@ -488,7 +492,7 @@ function Windows_Validator {
 
 					# Checking the MSDSM supported hardware list
 					$MSDSMSupportedHW_out = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW})
-					$MSDSMSupportedHW_out = ($MSDSMSupportedHW_out | Format-Table -AutoSize | Out-String).Trim()
+					$MSDSMSupportedHW_out = ($MSDSMSupportedHW_out | Select-Object ProductId, VendorId | Format-Table * | Out-String).Trim()
 
 					# Print the MPIO Settings
 					InfoMessage "MSDSM supported hardware list Section :"
@@ -595,7 +599,7 @@ function Windows_Validator {
 				InfoMessage "$MessageCounter - Running validation for Load Balance and Failover Policy for Individual Volumes"
 				$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO KDP") -OR ($_.FriendlyName -match "KMNRIO SDP") -OR ($_.FriendlyName -match "SILK KDP") -OR ($_.FriendlyName -match "SILK SDP")} | Sort-Object DeviceID | `
 				Select-object DeviceId,SerialNumber,FriendlyName,@{N="LoadBalancePolicy";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object LoadBalancePolicy).LoadBalancePolicy}}, `
-				CanPool,OperationalStatus,HealthStatus,@{Name="Size, Gb"; Expression={$_.Size/1Gb}},@{N="DriveLetter";E={($_ | Get-Disk | Get-Partition | Where-Object {$_.DriveLetter}).DriveLetter}}, `
+				CanPool,OperationalStatus,HealthStatus,@{Name="Size-Gb"; Expression={$_.Size/1Gb}},@{N="DriveLetter";E={($_ | Get-Disk | Get-Partition | Where-Object {$_.DriveLetter}).DriveLetter}}, `
 				@{N="DiskStatus";E={($_ | Get-Disk | select-object OperationalStatus).OperationalStatus}},@{N="PartitionStyle";E={($_ | Get-Disk | select-object PartitionStyle).PartitionStyle}})})
 
 				# Check the PD count 
@@ -603,7 +607,7 @@ function Windows_Validator {
 
 					# Print the MPIO Settings
 					InfoMessage "Silk Disks Settings Section :"
-					$Server_KMNRIO_PD_out = ($Server_KMNRIO_PD | Format-Table -AutoSize | Out-String).Trim() 
+					$Server_KMNRIO_PD_out = ($Server_KMNRIO_PD | Select-Object DeviceId,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,Size-Gb,DriveLetter,DiskStatus,PartitionStyle | Format-Table * | Out-String).Trim() 
 
 					# Print the MPIO into the html
 					handle_string_array_messages $Server_KMNRIO_PD_out "Data"
@@ -622,10 +626,32 @@ function Windows_Validator {
 				else {
 					InfoMessage "No SILK SDP Disks found on the server."
 				}
+
+				$MessageCounter++
+				PrintDelimiter
 				
+				# Check that CTRL volume is OFFLINE
+				InfoMessage "$MessageCounter - Running validation for Silk CTRL LU..."
+				if($Server_KMNRIO_PD) {
+					# Run over the CTRL disks and verify that each disk is with Offline state
+					foreach ($PD_Temp in ($Server_KMNRIO_PD | Where-Object {$_.SerialNumber.EndsWith(0000)})) {
+						# Check for each Individual if it Offline or not
+						if ($PD_Temp.DiskStatus -match "Offline") {
+							GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Disk Status Offline)"
+						}
+						else {
+							BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Disk Status Offline) but set to - $($PD_Temp.DiskStatus)"
+						}
+					}
+					
+				}
+				else {
+					InfoMessage "No SILK SDP Disks found on the server, Could not verify the CTRL LU state"
+				}
+
 				$MessageCounter++
 				PrintDelimiter 
-				
+
 				InfoMessage "$MessageCounter - Running validation for Disk Defrag configuration" 
 				$ScheduledDefragTask = (invoke-Command -Session $pssessions -ScriptBlock {(Get-ScheduledTask ScheduledDefrag).state})
 				if($ScheduledDefragTask) {
@@ -703,7 +729,7 @@ function Windows_Validator {
 								# Write that we are working on iscsinetadapter
 								InfoMessage "Checking full setings for iSCSI Adapter - $($iscsinetadapter)"
 
-								$iscsinetadapteradvancedproperty_out = ($iscsinetadapteradvancedproperty | Format-table -AutoSize| Out-String).Trim()
+								$iscsinetadapteradvancedproperty_out = ($iscsinetadapteradvancedproperty | Select-object ifAlias,InterfaceAlias,ValueName,ValueData | Format-table * | Out-String).Trim()
 								# Print the MPIO into the html
 								handle_string_array_messages $iscsinetadapteradvancedproperty_out "Data"
 							}

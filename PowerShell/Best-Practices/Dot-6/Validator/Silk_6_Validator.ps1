@@ -14,6 +14,7 @@
   Jan-2022 - Current version V2.1.0
   Feb-2022 - Current version V2.1.1
   Apr-2022 - Current version V2.1.2
+  May-2022 - Current version V2.1.3
     
  .NOTES
   Feb 2022 
@@ -23,6 +24,10 @@
   * (Win) Print the MSDSM output data 
   * (Win) Print the iSCSI Adapter/s output data 
   * (Win) Improve the query of Silk disks in "Load Balance and Failover Policy for Individual Volumes" section
+
+  May 2022
+  * (Win) Checking and Validate the CTRL LU
+  * (ESX) Fix the SATP pspoption to support policy options
 #>
 
 # Ensure the the minimum version of the PowerShell Validator is 5 and above
@@ -31,7 +36,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.1.2"
+[string]$SDP_Version = "2.1.3"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "Dot6"
@@ -721,7 +726,7 @@ function VMware_Validator {
 									BadMessage "Silk BP recommends setting SATP default psp to VMW_PSP_RR. Current value is $($SATP_Values.DefaultPSP)."
 									$issuecount = $issuecount + 1
 								}
-								if ($SATP_Values.PSPOptions -ne "iops=2") {
+								if ($SATP_Values.PSPOptions -NotMatch "\biops=2\b") {
 									BadMessage "Silk BP recommends setting SATP default pspoption to iops=2. Current value is $($SATP_Values.PSPOptions)."
 									$issuecount = $issuecount + 1
 								}
@@ -990,7 +995,7 @@ function Windows_Validator {
 
 					# Checking the MSDSM supported hardware list
 					$MSDSMSupportedHW_out = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW})
-					$MSDSMSupportedHW_out = ($MSDSMSupportedHW_out | Format-Table -AutoSize | Out-String).Trim()
+					$MSDSMSupportedHW_out = ($MSDSMSupportedHW_out | Select-Object ProductId, VendorId | Format-Table * | Out-String).Trim()
 
 					# Print the MPIO Settings
 					InfoMessage "MSDSM supported hardware list Section :"
@@ -1126,7 +1131,7 @@ function Windows_Validator {
 
 					# Print the MPIO Settings
 					InfoMessage "Silk Disks Settings Section :"
-					$Server_KMNRIO_PD_out = ($Server_KMNRIO_PD | Format-Table -AutoSize | Out-String).Trim() 
+					$Server_KMNRIO_PD_out = ($Server_KMNRIO_PD | Select-Object DeviceId,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,Size-Gb,DriveLetter,DiskStatus,PartitionStyle | Format-Table * | Out-String).Trim() 
 
 					# Print the MPIO into the html
 					handle_string_array_messages $Server_KMNRIO_PD_out "Data"
@@ -1147,6 +1152,28 @@ function Windows_Validator {
 				
 				$MessageCounter++
 				PrintDelimiter
+
+				# Check that CTRL volume is OFFLINE
+				InfoMessage "$MessageCounter - Running validation for Silk CTRL LU..."
+				if($Server_KMNRIO_PD) {
+					# Run over the CTRL disks and verify that each disk is with Offline state
+					foreach ($PD_Temp in ($Server_KMNRIO_PD | Where-Object {$_.SerialNumber.EndsWith(0000)})) {
+						# Check for each Individual if it Offline or not
+						if ($PD_Temp.DiskStatus -match "Offline") {
+							GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Disk Status Offline)"
+						}
+						else {
+							BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Disk Status Offline) but set to - $($PD_Temp.DiskStatus)"
+						}
+					}
+					
+				}
+				else {
+					InfoMessage "No SILK SDP Disks found on the server, Could not verify the CTRL LU state"
+				}
+
+				$MessageCounter++
+				PrintDelimiter 
 
 				switch($systemConnectivitytype) {
 					"fc" {
@@ -1287,7 +1314,7 @@ function Windows_Validator {
 									# Write that we are working on iscsinetadapter
 									InfoMessage "Checking full setings for iSCSI Adapter - $($iscsinetadapter)"
 
-									$iscsinetadapteradvancedproperty_out = ($iscsinetadapteradvancedproperty | Format-table -AutoSize| Out-String).Trim()
+									$iscsinetadapteradvancedproperty_out = ($iscsinetadapteradvancedproperty | Select-object ifAlias,InterfaceAlias,ValueName,ValueData | Format-table * | Out-String).Trim()
 									# Print the MPIO into the html
 									handle_string_array_messages $iscsinetadapteradvancedproperty_out "Data"
 
