@@ -1157,7 +1157,7 @@ function Windows_Validator {
 				InfoMessage "$MessageCounter - Running validation for Silk CTRL LU..."
 				if($Server_KMNRIO_PD) {
 					# Run over the CTRL disks and verify that each disk is with Offline state
-					foreach ($PD_Temp in ($Server_KMNRIO_PD | Where-Object {$_.SerialNumber.EndsWith(0000)})) {
+					foreach ($PD_Temp in ($Server_KMNRIO_PD | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
 						# Check for each Individual if it Offline or not
 						if ($PD_Temp.DiskStatus -match "Offline") {
 							GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Disk Status Offline)"

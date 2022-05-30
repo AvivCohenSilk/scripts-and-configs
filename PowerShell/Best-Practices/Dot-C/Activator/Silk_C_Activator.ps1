@@ -739,7 +739,7 @@ function Windows_Activator {
 						
 						# Load Balance and Failover Policy for Individual Volumes
 						$Server_KMNRIO_PD_CTRL = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO KDP") -OR ($_.FriendlyName -match "KMNRIO SDP") -OR ($_.FriendlyName -match "SILK KDP") -OR ($_.FriendlyName -match "SILK SDP")} | `
-						Where-Object {$_.SerialNumber.EndsWith(0000)} | Sort-Object DeviceID | Select-object SerialNumber,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}}, `
+						Where-Object {$_.SerialNumber.EndsWith("0000")} | Sort-Object DeviceID | Select-object SerialNumber,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}}, `
 						@{N="DiskStatus";E={($_ | Get-Disk | select-object OperationalStatus).OperationalStatus}})})
 
 						if($Server_KMNRIO_PD_CTRL) {

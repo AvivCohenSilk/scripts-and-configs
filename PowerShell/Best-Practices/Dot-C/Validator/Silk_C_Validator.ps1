@@ -284,37 +284,55 @@ function Windows_Validator {
 			[parameter()]
 			[CimSession]$CIMsession	
 		)
-
-		$allConnections = Get-IscsiConnection -CimSession $CIMsession
-
+	
+		$target = Get-IscsiTarget -CimSession $CIMsession | Where-Object {$_.NodeAddress -match "kaminario" -or $_.NodeAddress -match "silk"}
+		$allConnections = Get-IscsiConnection -CimSession $CIMsession -ErrorAction silentlycontinue 
+		if (!$allConnections -and $target) {
+			Write-Verbose "SCSI query failed - forcing MPIO claim update"
+			Update-MPIOClaimedHW -Confirm:0 | Out-Null # Rescan
+			Start-Sleep -Seconds 4
+			$allConnections = Get-IscsiConnection -CimSession $CIMsession -ErrorAction silentlycontinue 
+		}
+	
+		if (!$allConnections) {
+			Write-Verbose "No connections listed - terminating query"
+			return $null
+		}
+		
 		$returnArray = @()
-
-		$allTargetIPs = ($allConnections | Select-Object TargetAddress -Unique).TargetAddress
-
-		foreach ($i in $allTargetIPs) {
+	
+		# Change this query to Get-IscsiTargetPortal to better represent orphaned target portals.
+		# $allTargetIPs = ($allConnections | Select-Object TargetAddress -Unique).TargetAddress
+		$alltargetIPs = (Get-IscsiTargetPortal).TargetPortalAddress
+	
+		foreach ($i in $allTargetIPs | sort-object) {
+			$hostIP = ($allConnections | Where-Object {$_.TargetAddress -eq $i} | Select-Object InitiatorAddress -Unique).InitiatorAddress
+	
 			$o = New-Object psobject
 			$o | Add-Member -MemberType NoteProperty -Name "CNode IP" -Value $i
-			$o | Add-Member -MemberType NoteProperty -Name "Host IP" -Value ($allConnections | Where-Object {$_.TargetAddress -eq $i} | Select-Object InitiatorAddress -Unique).InitiatorAddress
-			$configured = ($allConnections | Where-Object {$_.TargetAddress -eq $i} | Get-IscsiSession -CimSession $CIMsession | Where-Object {$_.IsDiscovered}).count
-			if ($configured) {
+			$o | Add-Member -MemberType NoteProperty -Name "Host IP" -Value $hostIP
+			$configured = ($allConnections | Where-Object {$_.TargetAddress -eq $i} | Get-IscsiSession -CimSession $CIMsession | Where-Object {$_.IsDiscovered} | Measure-Object).count
+			if ($configured) {            
 				$o | Add-Member -MemberType NoteProperty -Name "Configured Sessions" -Value $configured
 			} else {
 				$o | Add-Member -MemberType NoteProperty -Name "Configured Sessions" -Value 0
 			}
-
-			$connected = ($allConnections | Where-Object {$_.TargetAddress -eq $i}).count
-			if ($connected) {
+	
+			$connected = ($allConnections | Where-Object {$_.TargetAddress -eq $i} | Measure-Object).count
+			if ($connected) {            
 				$o | Add-Member -MemberType NoteProperty -Name "Connected Sessions" -Value $connected
 			} else {
 				$o | Add-Member -MemberType NoteProperty -Name "Connected Sessions" -Value 0 
 			}
 			$o | Add-Member -MemberType NoteProperty -Name "Silk IQN" -Value ($allConnections | Where-Object {$_.TargetAddress -eq $i} |Get-IscsiSession -CimSession $CIMsession | Select-Object TargetNodeAddress -Unique).TargetNodeAddress
-
+	
 			$returnArray += $o
+	
 		}
-
+	  
 		if ($returnArray) {
-			return $returnArray | Format-Table *
+			$returnArray = $returnArray | Sort-Object "CNode IP"
+			return $returnArray 
 		} else {
 			return $null
 		}
@@ -634,7 +652,7 @@ function Windows_Validator {
 				InfoMessage "$MessageCounter - Running validation for Silk CTRL LU..."
 				if($Server_KMNRIO_PD) {
 					# Run over the CTRL disks and verify that each disk is with Offline state
-					foreach ($PD_Temp in ($Server_KMNRIO_PD | Where-Object {$_.SerialNumber.EndsWith(0000)})) {
+					foreach ($PD_Temp in ($Server_KMNRIO_PD | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
 						# Check for each Individual if it Offline or not
 						if ($PD_Temp.DiskStatus -match "Offline") {
 							GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Disk Status Offline)"
@@ -687,7 +705,7 @@ function Windows_Validator {
 				# Get the silk iSCSI Sessions
 				$SilkSessions = Get-SilkSessions -CIMsession $CIMsession
 				if($SilkSessions) {
-					handle_string_array_messages ($SilkSessions | Out-String).Trim() "Data"
+					handle_string_array_messages ($SilkSessions | Format-Table * | Out-String).Trim() "Data"
 				}
 				else {
 					InfoMessage "No Silk iSCSI Sessions found."
