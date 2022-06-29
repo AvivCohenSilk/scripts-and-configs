@@ -15,6 +15,8 @@
   Feb-2022 - Current version V2.1.1
   Apr-2022 - Current version V2.1.2
   May-2022 - Current version V2.1.3
+  May-2022 - Current version V2.1.4
+
     
  .NOTES
   Feb 2022 
@@ -28,6 +30,9 @@
   May 2022
   * (Win) Checking and Validate the CTRL LU
   * (ESX) Fix the SATP pspoption to support policy options
+
+  June 2022
+  * (Lin) Fixing open-iscsi and iscsid handling
 #>
 
 # Ensure the the minimum version of the PowerShell Validator is 5 and above
@@ -36,7 +41,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.1.3"
+[string]$SDP_Version = "2.1.4"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "Dot6"
@@ -1619,7 +1624,7 @@ function Linux_Validator {
 			}
 
 			'debian*' {
-				$command = "sudo dpkg -s | grep $($Pacakge)"
+				$command = "sudo dpkg -l | grep $($Pacakge)"
 				if($bLocalServer) {
 					$rpmCheck = Invoke-Expression $command
 				}
@@ -1669,6 +1674,57 @@ function Linux_Validator {
 		}
 		else {
 			BadMessage "$($Service) serivce not found, Please installed it."
+		}
+	}
+	#endregion
+
+	#region Checking_File_Content
+	Function Checking_File_Content {
+		Param(
+		[string]$FilePath,
+		[string]$FileConParameter,
+		[string]$FileConSeparator,
+		[string]$FileConValue
+		)
+		
+		# Boolean helper
+		$bFileFound = $false
+
+		# Note: make sure iscsi is set for automatic login:
+		# in /etc/iscsi/iscsid.conf , key “node.startup = automatic”
+		if($bLocalServer) {
+			# Test the path of the the file
+			if (-not (Test-Path -Path $FilePath)) {
+				BadMessage "File - $($FilePath) not found!"
+			} else {
+				# Checking the content found, if yes, checking the value
+				$FileConFound = (Get-Content -Path $FilePath | Select-String -Pattern $("^$FileConParameter")).Line.Trim()			
+				$bFileFound = $True
+			}
+		}
+		else {
+			$command     = "sudo cat $($FilePath)"
+			$FileContent = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command	
+			if (-not ($FileContent)) {
+				BadMessage "File - $($FilePath) not found!"
+			} else {
+				# Checking the content found, if yes, checking the value
+				$FileConFound = ($FileContent | Select-String -Pattern $("^$FileConParameter")).Line.Trim()
+				$bFileFound = $True
+			}
+		}
+
+		if($bFileFound) {
+			if(-not ($FileConFound)) {
+				BadMessage "File - $($FilePath) Don't contain $($FileConParameter)!"
+			} else {
+				$FileConFoundValue = $FileConFound.Split($FileConSeparator)[1].Trim()
+				if(-not ($FileConFoundValue -eq $FileConValue)) {
+					BadMessage "File - $($FilePath) contain - $($FileConParameter), Yet value is not $($FileConValue) but a $($FileConFoundValue)"
+				} else {
+					GoodMessage "File - $($FilePath) contain - $($FileConParameter), With value of a $($FileConValue)"
+				}
+			}
 		}
 	}
 	#endregion
@@ -2023,6 +2079,7 @@ function Linux_Validator {
 						}
 						'debian*' {
 							Checking_Package "multipath-tools" $linuxtype
+							Checking_Package "multipath-tools-boot" $linuxtype
 							Checking_Service "multipathd" $linuxtype
 						}
 					}
@@ -2036,8 +2093,7 @@ function Linux_Validator {
 								Checking_Service "iscsid" $linuxtype
 							}
 							'debian*' {
-								Checking_Package "multipath-tools" $linuxtype
-								Checking_Package "lsscsi" $linuxtype
+								#Checking_Package "lsscsi" $linuxtype
 								Checking_Package "open-iscsi" $linuxtype
 								Checking_Service "iscsid" $linuxtype
 								Checking_Service "open-iscsi" $linuxtype
@@ -2325,7 +2381,7 @@ function Linux_Validator {
 							$ioschedulers = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
 						}
 
-						# 	Write the 98-sdp-io.rules into the HTML file
+						# 	Write the udev rules into the HTML file
 						InfoMessage "File - $($IOschedulersPath) - Content:"
 						handle_string_array_messages ($ioschedulers |out-string).trim() "Data"
 
@@ -2453,7 +2509,10 @@ function Linux_Validator {
 							}
 						}
 						"iscsi" {
-							InfoMessage "$MessageCounter - iSCSI IQN & Sessions Section"
+							InfoMessage "$MessageCounter - iSCSI Configurtion & IQN & Sessions Section"
+
+							# Checking the iscsid.conf file
+							Checking_File_Content -FilePath "/etc/iscsi/iscsid.conf" -FileConParameter "node.startup" -FileConSeparator "=" -FileConValue "automatic"
 
 							# IQN Name
 							# cat /etc/iscsi/initiatorname.iscsi
@@ -2529,7 +2588,6 @@ function Linux_Validator {
 						$Device_IO_Rule = ((Invoke-Expression $command1) -join " ").trim()
 						$command = $command.replace("XXXXX",$Device_IO_Rule)
 						$Device_IO_Rule = Invoke-Expression $command
-
 					}
 					else {
 						$Device_IO_Rule = ((plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command1) -join " ").trim()

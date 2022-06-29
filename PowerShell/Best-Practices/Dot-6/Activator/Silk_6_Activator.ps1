@@ -15,6 +15,7 @@
   Feb-2022 - Current version V2.1.1
   Mar-2022 - Current version V2.2.0
   Mar-2022 - Current version V2.2.1
+  Mar-2022 - Current version V2.2.2
     
  .NOTES  
   Mar 2022
@@ -23,6 +24,9 @@
   May 2022
   * (Win) Checking and Validate the CTRL LU
   * (ESX) Fix the SATP pspoption to support policy options
+
+  June 2022
+  * (Lin) Fixing open-iscsi and iscsid handling
 #>
 
 <#
@@ -42,7 +46,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Validator begin of the script - Activator #####################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.2.1"
+[string]$SDP_Version = "2.2.2"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "Dot6"
@@ -1743,12 +1747,14 @@ function Linux_Activator {
 	}
 	#endregion
 	
-		#region Checking_Package
+	#region Checking_Package
 	Function Checking_Package {
 		Param(		
 		[string]$Pacakge,
 		[string]$LinuxOSType
 		)
+
+		$bUpdate = $false
 
 		# Checking the PREREQUISITES of the packages that must be installed on the machine
 		switch -Wildcard ($LinuxOSType) {
@@ -1762,8 +1768,11 @@ function Linux_Activator {
 				}
 
 				if ($rpmCheck) {
-					GoodMessage "package $($Pacakge) Installed - version:"
+					GoodMessage "package $($Pacakge) Installed, Will try to update to newest version!, The Current version:"
 					handle_string_array_messages ($rpmCheck | Out-String).trim() "Data"
+
+					# Found so we Runing update
+					$bUpdate = $true
 				}
 				else {
 					$command = "sudo yum -y install $($Pacakge)"
@@ -1774,11 +1783,23 @@ function Linux_Activator {
 					else {
 						$rpmInstall = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
 					}
-					GoodMessage "Package installation is complete"
+					GoodMessage "Package installation is completed, Will try to update to newest version!"
+					$bUpdate = $true
+				}
+
+				if($bUpdate = $true) {
+					$command = "sudo yum -y update $($Pacakge)"
+					if($bLocalServer) {
+						$rpmInstall = Invoke-Expression $command
+					}
+					else {
+						$rpmInstall = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
+					}
+					GoodMessage "Package upading is completed"
 				}
 			}
 			'debian*' {
-				$command = "sudo dpkg -s | grep $($Pacakge)"
+				$command = "sudo dpkg -l | grep $($Pacakge)"
 				if($bLocalServer) {
 					$rpmCheck = Invoke-Expression $command
 				}
@@ -1787,8 +1808,11 @@ function Linux_Activator {
 				}
 
 				if ($rpmCheck) {
-					GoodMessage "package $($Pacakge) Installed - version:"
+					GoodMessage "package $($Pacakge) Installed, Will try to update to newest version!, The Current version:"
 					handle_string_array_messages ($rpmCheck | Out-String).trim() "Data"
+
+					# Found so we Runing update
+					$bUpdate = $true
 				}
 				else {
 					$command = "sudo apt-get -y install $($Pacakge)"
@@ -1799,7 +1823,19 @@ function Linux_Activator {
 					else {
 						$rpmInstall = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
 					}
-					GoodMessage "Package installation is complete"
+					GoodMessage "Package installation is completed, Will try to update to newest version!"
+					$bUpdate = $true
+				}
+
+				if($bUpdate = $true) {
+					$command = "sudo apt-get -y --only-upgrade install $($Pacakge)"					
+					if($bLocalServer) {
+						$rpmInstall = Invoke-Expression $command
+					}
+					else {
+						$rpmInstall = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
+					}
+					GoodMessage "Package upading is completed"
 				}
 			}
 		}
@@ -1848,7 +1884,7 @@ function Linux_Activator {
 		}
 	}
 	#endregion
-	
+
 	# Local Variable
 	[boolean]$bLocalServer = $false
 
@@ -2154,6 +2190,7 @@ function Linux_Activator {
 						$Linux_ISCSI = UserSelections "ISCSI" 
 					}
 					
+					# Starting the main section of Applying the best practices
 					if($MPIO_Services) {
 						# Checking the PREREQUISITES of the packages that must be installed on the machine.
 						InfoMessage "$MessageCounter - Checking / Enabling / Installing Packages and Services"
@@ -2394,7 +2431,7 @@ function Linux_Activator {
 						#overwrite the files content
 						InfoMessage "$MessageCounter - Running the Activator for ioscheduler configuration"	
 						
-						$udev_Silk_BP_data = @('# Silk BP Configuration for 98-sdp-io.rules')
+						$udev_Silk_BP_data = @('# Silk BP Configuration for SDP-io.rules')
 						if ($PSPlatform -eq $Platfrom_Windows) {
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""20024f400*"",ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-20024f400*"",ATTR{queue/scheduler}=""noop""'
@@ -2502,16 +2539,7 @@ function Linux_Activator {
 					
 					$MessageCounter++
 					PrintDelimiter
-					
-					switch -Wildcard ($linuxtype) {
-						'debian*' {
-							InfoMessage "$MessageCounter - Please Add the file systems mounted on the SDP to  /etc/fstab with the noatime option"
-							InfoMessage "For more info about this please follow the guide at page 23 - 10.1.noatime option "
-							$MessageCounter++
-							PrintDelimiter
-							}
-						}
-					
+
 					switch($systemConnectivitytype) {
 						"fc" {  
 							if ($Linux_Qlogic) {								
@@ -2681,35 +2709,59 @@ function Linux_Activator {
 										$iSCSI_command_enable    = "sudo systemctl enable iscsi"
 										switch ($linuxtype)	{
 											"rhel7" {
-												$iSCSI_command_restart   = "sudo systemctl start iscsid"
+												$iSCSI_command_start   = "sudo systemctl start iscsid"
 											}
 											"rhel6" {
 												
-												$iSCSI_command_restart   = "/etc/init.d/iscsi start"
+												$iSCSI_command_start   = "/etc/init.d/iscsi start"
 											}
 											"rhel5" {
-												$iSCSI_command_restart   = "/etc/init.d/iscsi start"
+												$iSCSI_command_start   = "/etc/init.d/iscsi start"
 											}
+										}
+
+										if($bLocalServer) {
+											Invoke-Expression $iSCSI_command_chkconfig
+											Invoke-Expression $iSCSI_command_start
+											Invoke-Expression $iSCSI_command_enable
+										}
+										else {
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_chkconfig
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_restart
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_enable
 										}
 									}
 									'debian*' {
 										Checking_Package "open-iscsi" $linuxtype
 										$iSCSI_command_chkconfig = "sudo chkconfig --level 345 open-iscsi on"
-										$iSCSI_command_restart   = "sudo systemctl start open-iscsi"
-										$iSCSI_command_enable    = "sudo systemctl enable open-iscsi"
-									}
-								}
+										$iSCSI_command_start_iscsid      = "sudo systemctl start iscsid"
+										$iSCSI_command_enable_iscsid     = "sudo systemctl enable iscsid"
+										$iSCSI_command_start_open_iscsi  = "sudo systemctl start open-iscsi"
+										$iSCSI_command_enable_open_iscsi = "sudo systemctl enable open-iscsi"
+										$iSCSI_command_restart           = "sudo systemctl resart iscsid open-iscsi"
 
-								if($bLocalServer) {
-									Invoke-Expression $iSCSI_command_chkconfig
-									Invoke-Expression $iSCSI_command_restart
-									Invoke-Expression $iSCSI_command_enable
-								}
-								else {
-									plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_chkconfig
-									plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_restart
-									plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_enable
-								}
+
+										if($bLocalServer) {
+											Invoke-Expression $iSCSI_command_chkconfig
+											Invoke-Expression $iSCSI_command_start_iscsid
+											Invoke-Expression $iSCSI_command_enable_iscsid
+											Invoke-Expression $iSCSI_command_start_open_iscsi
+											Invoke-Expression $iSCSI_command_enable_open_iscsi
+											Invoke-Expression $iSCSI_command_restart
+										}
+										else {
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_chkconfig
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_start_iscsid
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_enable_iscsid
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_start_open_iscsi
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_enable_open_iscsi
+											plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $iSCSI_command_restart
+										}
+									}
+								}							
+
+								$MessageCounter++
+								PrintDelimiter
 							}
 							else
 							{
