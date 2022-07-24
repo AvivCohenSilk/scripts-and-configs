@@ -14,8 +14,9 @@
   Jan-2022 - Current version V2.1.0
   Feb-2022 - Current version V2.1.1
   Mar-2022 - Current version V2.2.0
-  Mar-2022 - Current version V2.2.1
-  Mar-2022 - Current version V2.2.2
+  May-2022 - Current version V2.2.1
+  Jun-2022 - Current version V2.2.3
+  Jul-2022 - Current version V2.2.4
     
  .NOTES  
   Mar 2022
@@ -25,8 +26,11 @@
   * (Win) Checking and Validate the CTRL LU
   * (ESX) Fix the SATP pspoption to support policy options
 
-  June 2022
+  Jun 2022
   * (Lin) Fixing open-iscsi and iscsid handling
+  
+  Jul 2022
+  * (Win) Added activation regarding TRIM/Unmap in Windows.
 #>
 
 <#
@@ -46,7 +50,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Validator begin of the script - Activator #####################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.2.2"
+[string]$SDP_Version = "2.2.4"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "Dot6"
@@ -971,6 +975,10 @@ function Windows_Activator {
 				PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets" 
 				$CTRL_LU_Offline = UserSelections "Management Lugical Unit" "CTRL Silk Disk"
 
+				# Windows TRIM/Unmap
+				PrintDescription "Category: Performance related.`nParameter type: TRIM / UNmap Disablie Disable Delete Notification.`nDescription: The TRIM functionality within Windows is controlled by a registry setting. By default, the setting is enabled which effectively enables auto-unmap."
+				$WinTrimUnmapRegistry = UserSelections "Trim / UNmap" "Disable Delete Notification Key"				
+
 				# Defragmentation Scheduled Task
 				PrintDescription "Category: Performance related.`nParameter type: Disablie Disk Defragmentation Scheduled Task.`nDescription: In a Windows, Hyperv and even Windows server run as a virtual Machine on ESX environments, it is recommended to Disable Disk Fragmentation Scheduled Task (ScheduledDefrag) to avoid performance issues"
 				$Defragmentation = UserSelections "Defragmentation" "Disable Scheduled Task"
@@ -1619,6 +1627,28 @@ function Windows_Activator {
 				}
 				else{
 					InfoMessage "$MessageCounter - Skipping CTRL Silk Disk Settings"
+				}
+
+				$MessageCounter++
+				PrintDelimiter
+
+				if($WinTrimUnmapRegistry) {
+					# Check that TRIM/UNMAP Registry Key
+					InfoMessage "$MessageCounter - Running activation for Windows TRIM/UNMAP Registry Key..."
+					$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
+					if($WindowsrimUnampRegData) {					
+						if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
+							GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
+						}
+						else {
+							WarningMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification), Disabling DisableDeleteNotification, starting..." 
+							(invoke-Command -Session $pssessions -ScriptBlock {(Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification -Value 1)}) | Out-Null
+							GoodMessage "Windows Trim / UNMAP DisableDeleteNotification Task, complete"
+						}
+					}
+					else {
+						InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
+					}
 				}
 
 				$MessageCounter++

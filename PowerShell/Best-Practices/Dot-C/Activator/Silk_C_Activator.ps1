@@ -10,6 +10,7 @@
  20-Dec-2021 - Current version V1.0.0
  01-Jan-2022 - Current version V1.0.1
  11-May-2022 - Current version V1.0.2
+ 24-Jul-2022 - Current version V1.0.3
     
  .NOTES
  Dec 2021
@@ -21,6 +22,10 @@
  
  May 2022
  * (Win) Checking and Validate the CTRL LU
+
+ Jul 2022
+ * (Win) Added activation regarding TRIM/Unmap in Windows.
+ * (Lin) udev rules for Linux.
 #>
 
 <#
@@ -40,7 +45,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Activator begin of the script - Activate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "1.0.2"
+[string]$SDP_Version = "1.0.3"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "DotC"
@@ -423,6 +428,10 @@ function Windows_Activator {
 				PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets" 
 				$CTRL_LU_Offline = UserSelections "Management Lugical Unit" "CTRL Silk Disk"
 
+				# Windows TRIM/Unmap
+				PrintDescription "Category: Performance related.`nParameter type: TRIM / UNmap Disablie Disable Delete Notification.`nDescription: The TRIM functionality within Windows is controlled by a registry setting. By default, the setting is enabled which effectively enables auto-unmap."
+				$WinTrimUnmapRegistry = UserSelections "Trim / UNmap" "Disable Delete Notification Key"
+
 				# Defragmentation Scheduled Task
 				PrintDescription "Category: Performance related.`nParameter type: Disablie Disk Defragmentation Scheduled Task.`nDescription: In a Windows, Hyperv and even Windows server run as a virtual Machine on Cloud environments, it is recommended to Disable Disk Fragmentation Scheduled Task (ScheduledDefrag) to avoid performance issues"
 				$Defragmentation = UserSelections "Defragmentation" "Disable Windows Defragmentation Scheduled Task"
@@ -766,6 +775,28 @@ function Windows_Activator {
 				}
 				else{
 					InfoMessage "$MessageCounter - Skipping CTRL Silk Disk Settings"
+				}
+
+				$MessageCounter++
+				PrintDelimiter
+
+				if($WinTrimUnmapRegistry) {
+					# Check that TRIM/UNMAP Registry Key
+					InfoMessage "$MessageCounter - Running activation for Windows TRIM/UNMAP Registry Key..."
+					$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
+					if($WindowsrimUnampRegData) {					
+						if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
+							GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
+						}
+						else {
+							WarningMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification), Disabling DisableDeleteNotification, starting..." 
+							(invoke-Command -Session $pssessions -ScriptBlock {(Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification -Value 1)}) | Out-Null
+							GoodMessage "Windows Trim / UNMAP DisableDeleteNotification Task, complete"
+						}
+					}
+					else {
+						InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
+					}
 				}
 
 				$MessageCounter++
@@ -1556,16 +1587,34 @@ function Linux_Activator {
 
 						$udev_Silk_BP_data = @('# Silk BP Configuration for 98-sdp-io.rules')
 						if ($PSPlatform -eq $Platfrom_Windows) {
-							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""20024*"",ATTR{queue/scheduler}=""noop""'
-							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-20024*"",ATTR{queue/scheduler}=""noop""'
-							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""20024*"",ATTR{queue/scheduler}=""none""'
-							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-20024*"",ATTR{queue/scheduler}=""none""'
+							# UDEV for 2002* 
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{queue/scheduler}=""noop""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{device/timeout}=""300""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-2002*"", ATTR{queue/scheduler}=""noop""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{queue/scheduler}=""none""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-2002*"", ATTR{queue/scheduler}=""none""'
+							
+							# UDEV for 280b*
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""280b*"", ATTR{queue/scheduler}=""noop""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""280b*"", ATTR{device/timeout}=""300""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-280b*"", ATTR{queue/scheduler}=""noop""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""280b*"", ATTR{queue/scheduler}=""none""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-280b*"", ATTR{queue/scheduler}=""none""'
 						}
 						else {
-							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="20024*",ATTR{queue/scheduler}="noop"'
-							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-20024*",ATTR{queue/scheduler}="noop"'
-							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="20024*",ATTR{queue/scheduler}="none"'
-							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-20024*",ATTR{queue/scheduler}="none"'
+							# UDEV for 2002* 
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="noop"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{device/timeout}="300"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="noop"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="none"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="none"'
+							
+							# UDEV for 280b*
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{queue/scheduler}="noop"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="280b*", ATTR{device/timeout}="300"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="noop"'							
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{queue/scheduler}="none"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="none"'
 						}
 						# Get /usr/lib/udev/rules.d/98-sdp-io.rules file from server
 						$udev_Silk_BP_data = $udev_Silk_BP_data | Out-String -Stream

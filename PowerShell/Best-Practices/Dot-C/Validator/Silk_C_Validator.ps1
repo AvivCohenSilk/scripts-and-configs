@@ -14,6 +14,7 @@
  22-Feb-2022 - Current version V1.0.4
  04-Apr-2022 - Current version V1.0.5
  11-May-2022 - Current version V1.0.6
+ 24-Jul-2022 - Current version V1.0.7
     
  .NOTES
  Dec 2021
@@ -32,8 +33,11 @@
  * (Win) Improve the query of Silk disks in "Load Balance and Failover Policy for Individual Volumes" section
 
  May 2022
-* (Win) Checking and Validate the CTRL LU
+ * (Win) Checking and Validate the CTRL LU
 
+ Jul 2022
+ * (Win/Lin) Added validation regarding TRIM/Unmap in Windows and Linux.
+ * (Lin) udev rules for Linux.
 #>
 
 # Ensure the minimum version of the PowerShell Validator is 5 and above
@@ -42,7 +46,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "1.0.6"
+[string]$SDP_Version = "1.0.7"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "DotC"
@@ -665,6 +669,24 @@ function Windows_Validator {
 				}
 				else {
 					InfoMessage "No SILK SDP Disks found on the server, Could not verify the CTRL LU state"
+				}
+
+				$MessageCounter++
+				PrintDelimiter 
+
+				# Check that TRIM/UNMAP Registry Key
+				InfoMessage "$MessageCounter - Running validation for Windows TRIM/UNMAP Registry Key..."
+				$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
+				if($WindowsrimUnampRegData) {					
+					if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
+						GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
+					}
+					else {
+						BadMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification)"
+					}
+				}
+				else {
+					InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
 				}
 
 				$MessageCounter++
@@ -1463,7 +1485,7 @@ function Linux_Validator {
 						$devices_line_check   = $outItems_array | Select-String -Pattern 'devices {' | Select-Object -ExpandProperty LineNumber
 						$blacklist_exceptions_line_check   = $outItems_array | Select-String -Pattern 'blacklist_exceptions {' | Select-Object -ExpandProperty LineNumber
 
-						InfoMessage "Running validation for Multipath configuration"
+						InfoMessage "Running validation for Multipath configuration - Starting with defaults section"
 
 						if(!$defaults_line_check) {
 							BadMessage "Could not found the defaults section in Multipath.conf, skipping checking Multipath defaults Section"
@@ -1490,8 +1512,9 @@ function Linux_Validator {
 							$blacklist_data  = ($multipathconf[($blacklist_line_b-1) .. ($blacklist_line_e -1)]).trim()
 
 							$blacklist_device_line = $blacklist_data | Select-String -Pattern 'device {' | Select-Object -ExpandProperty LineNumber
-
+							
 							# Multipath blacklist Parameters Section
+							InfoMessage "Running validation for Multipath configuration - blacklist Section"
 							ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param1
 							ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param2
 							ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param3
@@ -1610,6 +1633,7 @@ function Linux_Validator {
 							BadMessage "Vendor SILK with products KDP (Found = $venodr_param_SILK_KDP) & SDP (Found = $venodr_param_SILK_SDP), Please validate and fix the multipath.conf!"
 						}
 
+						InfoMessage "Running validation for Multipath configuration - blacklist_exceptions Section"
 						if(!$blacklist_exceptions_line_check) {
 							BadMessage "Could not found the blacklist exceptions section in Multipath.conf, skipping checking blacklist_exceptions Multipath Section"
 						}
@@ -1634,8 +1658,9 @@ function Linux_Validator {
 					# Get /usr/lib/udev/rules.d/98-sdp-io.rules file from server 
 					$ID_SERIAL_scheduler_param_noop = '\"noop"' , "noop"
 					$DM_UUID_scheduler_param_noop   = '\"noop"' , "noop"
-					$ID_SERIAL_scheduler_param_none = '\"none"' , "none"
+					$ID_SERIAL_scheduler_param_none = '\"none"' , "none"					
 					$DM_UUID_scheduler_param_none   = '\"none"' , "none"
+					$ID_SERIAL_device_timeout_param = '\"300"' , "300"
 
 					# Get multipath.conf file from server 
 					$command = "test -f /usr/lib/udev/rules.d/98-sdp-io.rules && echo true || echo false"
@@ -1660,25 +1685,60 @@ function Linux_Validator {
 						handle_string_array_messages ($ioschedulers |out-string).trim() "Data"
 
 						# Cleanup empty spaces and rows
-						$ioschedulers = $ioschedulers.Trim() | where-object {$_}
+						$ioschedulersData = $ioschedulers.Trim() | where-object {$_}
 
 						# Get only the relavant rows
-						# We have definations of 20024* (need to be 4)
-						$ioschedulers = $ioschedulers -match "20024*"
+						# We have definations of 2002* (need to be 5)						
+						$ioschedulersD1 = $ioschedulersData -match "2002*"						
+						
+						# Validate 98-sdp-io.rules - Example (10 Lines)
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="noop"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{device/timeout}="300"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="none"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="noop"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="none"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{queue/scheduler}="noop"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{device/timeout}="300"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{queue/scheduler}="none"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="noop"
+						# ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="none"
 
-						# Validate 98-sdp-io.rules - Example
-						#ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="20024*",ATTR{queue/scheduler}="noop"
-						#ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-20024*",ATTR{queue/scheduler}="noop"
-						#ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="20024*",ATTR{queue/scheduler}="none"
-						#ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-20024*",ATTR{queue/scheduler}="none"
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_noop
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_noop
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_none
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_none
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*device/timeout" -Parameter_value_array $ID_SERIAL_device_timeout_param
+						
+						# We have definations of 280b* (need to be 5)
+						$ioschedulersD2 = $ioschedulersData -match "280b*"
 
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_noop
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_noop
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_none
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_none
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_noop
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_noop
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_none
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_none
+						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*device/timeout" -Parameter_value_array $ID_SERIAL_device_timeout_param
 					}
 					else {
 						BadMessage "98-sdp-io.rules not found on /usr/lib/udev/rules.d/98-sdp-io.rules"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					InfoMessage "$MessageCounter - Running validation for Linux TRIM/UNmap (fstrim) option"
+					
+					$command = "cat /etc/fstab | grep -i 'discard'"
+					if($bLocalServer) {
+						$fstab = Invoke-Expression $command
+					}
+					else {
+						$fstab = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
+					}
+					if($fstab) {
+							WarningMessage "Please check if the rows that contain the discard are Silk Devices"
+					}
+					else {
+						InfoMessage "fstab Silk mount file system not contain rows with discard!"
 					}
 
 					$MessageCounter++

@@ -15,8 +15,8 @@
   Feb-2022 - Current version V2.1.1
   Apr-2022 - Current version V2.1.2
   May-2022 - Current version V2.1.3
-  May-2022 - Current version V2.1.4
-
+  Jun-2022 - Current version V2.1.4
+  Jul-2022 - Current version V2.1.5
     
  .NOTES
   Feb 2022 
@@ -31,8 +31,11 @@
   * (Win) Checking and Validate the CTRL LU
   * (ESX) Fix the SATP pspoption to support policy options
 
-  June 2022
+  Jun 2022
   * (Lin) Fixing open-iscsi and iscsid handling
+
+  Jul 2022
+  * (Win/Lin) Added validation regarding TRIM/Unmap in Windows and Linux.
 #>
 
 # Ensure the the minimum version of the PowerShell Validator is 5 and above
@@ -41,7 +44,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.1.4"
+[string]$SDP_Version = "2.1.5"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "Dot6"
@@ -1175,6 +1178,24 @@ function Windows_Validator {
 				}
 				else {
 					InfoMessage "No SILK SDP Disks found on the server, Could not verify the CTRL LU state"
+				}
+
+				$MessageCounter++
+				PrintDelimiter 
+
+				# Check that TRIM/UNMAP Registry Key
+				InfoMessage "$MessageCounter - Running validation for Windows TRIM/UNMAP Registry Key..."
+				$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
+				if($WindowsrimUnampRegData) {					
+					if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
+						GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
+					}
+					else {
+						BadMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification)"
+					}
+				}
+				else {
+					InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
 				}
 
 				$MessageCounter++
@@ -2404,8 +2425,29 @@ function Linux_Validator {
 					$MessageCounter++
 					PrintDelimiter
 
+					# LINUX TRIM/UNMAP
+					InfoMessage "$MessageCounter - Running validation for Linux TRIM/UNmap (fstrim) option"
+					
+					$command = "cat /etc/fstab | grep -i 'discard'"
+					if($bLocalServer) {
+						$fstab = Invoke-Expression $command
+					}
+					else {
+						$fstab = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
+					}
+					if($fstab) {
+							WarningMessage "Please check if the rows that contain the discard are Silk Devices"
+					}
+					else {
+						InfoMessage "fstab Silk mount file system not contain rows with discard!"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
 					InfoMessage "$MessageCounter - Running validation for noatime option on debian distro OS"
 
+					# Linux Debian Check the noatime Option
 					if(($linuxtype) -match ("debian")) {
 						$command = "cat /etc/fstab | grep -E '/dev/sda7|/chroot'"
 						if($bLocalServer) {
