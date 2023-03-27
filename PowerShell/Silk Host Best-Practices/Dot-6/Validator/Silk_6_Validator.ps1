@@ -53,8 +53,8 @@
 if($PSVersionTable.PSEdition -eq "Core" ) {
 	if ($PSVersionTable.PSVersion.Major -ge 7) {
 		# Platform Section - Powershell Core 7 (Win32NT / Unix)
-		if(!($Platfrom_Windows)){Set-Variable Platfrom_Windows -option Constant -Scope Script -value "Win32NT"}
-		if(!($Platfrom_Linux)){Set-Variable Platfrom_Linux -option Constant -Scope Script -value "Unix"}
+		if(!($Platfrom_Windows)) {Set-Variable Platfrom_Windows -option Constant -Scope Script -value "Win32NT"}
+		if(!($Platfrom_Linux)) {Set-Variable Platfrom_Linux -option Constant -Scope Script -value "Unix"}
 		$PSPlatform = $PSVersionTable.Platform	
 	}
 	else {
@@ -71,6 +71,7 @@ else {
 	$bExitMenu = $true
 }
 #endregion
+
 ##################################### End Silk Validator begin of the script - validate ####################################
 
 ##################################### Global functions #####################################################################
