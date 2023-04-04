@@ -1,6 +1,6 @@
 <#
     ===========================================================================================================================================
-    Release version: 3.0.0.3
+    Release version: 3.0.0.5
     -------------------------------------------------------------------------------------------------------------------------------------------
     Maintained by:  Aviv.Cohen@Silk.US
     Organization:   Silk.us, Inc.
@@ -74,19 +74,19 @@ Function InfoMessage {
 }
 Function DataMessage {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
-	Write-host "$($MessageCurrentObject) - [Data] - $args"
+	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor
 	$SDPBPHTMLBody += "<div id='DataMessage'>$($MessageCurrentObject) - [Data] - $args</div>"
 }
 
 Function DataMessageBlock {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
-	Write-host "$($MessageCurrentObject) - [Data] - $args"
+	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor	
 	$SDPBPHTMLBody += "<div id='DataMessage'><p id='whitepreclass'>$args</p></div>"
 }
 
-Function WarningMessage {	
+Function WarningMessage {
 	$host.ui.RawUI.ForegroundColor = "Yellow"
 	Write-host "$($MessageCurrentObject) - [WARN] - $args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor
@@ -574,7 +574,7 @@ function VMware_Validator {
 								$iSCSInics     = $Esxcli.iscsi.networkportal.list.invoke()
 								$iSCSInicsData = $iSCSInics | where-object {$_.Adapter -eq $target.Adapter} | Select-Object Adapter,CompliantStatus,CurrentSpeed,IPv4,MTU,PathStatus,PortGroup,Vmknic,Vswitch
 								InfoMessage "Port Binding Configuration is:"
-								handle_string_array_messages ($iSCSInicsData | Format-table * -AutoSize  |Out-String).Trim() "Data"								
+								handle_string_array_messages ($iSCSInicsData | Format-table * -AutoSize  |Out-String).Trim() "Data"
 								
 								if($iSCSInicsData)
 								{
@@ -582,7 +582,7 @@ function VMware_Validator {
 									$vSwitch     = get-VirtualSwitch -Name $vSwitchName | Select-Object Name,Mtu,Nic
 									$physicalNic = $esxcli.network.nic.pauseParams.list.Invoke() | Select-Object NIC,PauseRX,PauseTX | where-object {$_.Nic -match $vSwitch.Nic }									
 									InfoMessage "Physical Nic and Flow-Control are:"
-									handle_string_array_messages ($physicalNic | Format-table * -AutoSize | Out-String).Trim() "Data"		
+									handle_string_array_messages ($physicalNic | Format-table * -AutoSize | Out-String).Trim() "Data"
 								}
 							}
 
@@ -600,7 +600,7 @@ function VMware_Validator {
 						# Validate Qlogic Settings 
 						# ========================
 						InfoMessage "$MessageCounter - Running validation for Qlogic settings"
-						if($systemConnectivitytype -eq "fc") { 							
+						if($systemConnectivitytype -eq "fc") {
 							$QlogicOptions = $vmhost | Get-VMHostModule -Name "ql*" -ErrorAction SilentlyContinue | Select-Object Options
 							if ($QlogicOptions) {
 								$HBA_ql2xmaxqdepth = 256
@@ -734,7 +734,7 @@ function VMware_Validator {
 
 						if ($SATP_Values.Count -ge 1) {
 							if ($SATP_Values.Count -gt 1) {
-								BadMessage "There is more than one KMNRIO SATP rule. The last rule found will be the one in use."	
+								BadMessage "There is more than one KMNRIO SATP rule. The last rule found will be the one in use."
 								$bFoundError = $True
 							}
 							else {
@@ -769,7 +769,7 @@ function VMware_Validator {
 								}
 								else {
 									GoodMessage "Silk SATP rule found and with right values : " 
-									handle_string_array_messages $(($SATP_Values | out-string).trim()) "Data"									
+									handle_string_array_messages $(($SATP_Values | out-string).trim()) "Data"
 								}
 							}
 						}
@@ -954,7 +954,7 @@ function Windows_Validator {
 				}
 				elseif ([string]::IsNullOrEmpty($CIMsession)) { 
 					$script:NumOfUnreachableHosts += 1
-					WarningMessage "The windows Server $($WinServer) New-CimSession not able to establish (Check the WinRM in the remote server), skipping this server..."					
+					WarningMessage "The windows Server $($WinServer) New-CimSession not able to establish (Check the WinRM in the remote server), skipping this server..."
 				}
 				else {								
 					# Reseting the counter message sections
@@ -967,9 +967,9 @@ function Windows_Validator {
 					DataMessage "Windows OS Version is - $($Win32OS.Version)"
 
 					# Write the Windows Server Extra data (CPU & Memory)
-					$WinOSCPU    = Get-CimInstance -CimSession $CIMsession -class Win32_ComputerSystem				
-					$WinOSMemory = Get-CimInstance -CimSession $CIMsession -class CIM_PhysicalMemory				
-					$WinOSPhysicalMemory = [math]::Round(($WinOSMemory.Capacity | Measure-Object -Sum).Sum /1GB,4)					
+					$WinOSCPU    = Get-CimInstance -CimSession $CIMsession -class Win32_ComputerSystem
+					$WinOSMemory = Get-CimInstance -CimSession $CIMsession -class CIM_PhysicalMemory
+					$WinOSPhysicalMemory = [math]::Round(($WinOSMemory.Capacity | Measure-Object -Sum).Sum /1GB,4)
 
 					DataMessage "Number Of Processors (Sockets) - $($WinOSCPU.NumberOfProcessors)"
 					DataMessage "Number Of Logical Processors (vCPUs) - $($WinOSCPU.NumberOfLogicalProcessors)"
@@ -1152,7 +1152,7 @@ function Windows_Validator {
 							}
 						}
 
-						# Checking the KMNRIO supported hardware list - Associating Silk Data Platform Volumes with MPIO DSM				
+						# Checking the KMNRIO supported hardware list - Associating Silk Data Platform Volumes with MPIO DSM
 						$MSDSMSupportedHW_K2 = $MSDSMSupportedHW | where-object {($_.ProductId -eq "K2") -AND ($_.VendorId -eq "KMNRIO")}
 						if ($MSDSMSupportedHW_K2) {
 							GoodMessage "MPIO DSM KMNRIO & K2 DSM value is properly configured according to Silk's BP"
@@ -1189,7 +1189,7 @@ function Windows_Validator {
 					# Load Balance and Failover Policy for Individual Volumes
 					InfoMessage "$MessageCounter - Running validation for Load Balance and Failover Policy for Individual Volumes"
 
-					# Get all disks and their associated physical disks by SerialNumber (using with CimSession for local and remote servers)				
+					# Get all disks and their associated physical disks by SerialNumber (using with CimSession for local and remote servers)
 					$disks = invoke-Command -Session $pssessions -ScriptBlock {Get-Disk | Select-Object SerialNumber,Number, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle | Where-Object {($_.FriendlyName -match "KMNRIO K2") -OR ($_.FriendlyName -match "SILK K2") -OR ($_.FriendlyName -match "SILK SDP")}}
 					$physicalDisks = invoke-Command -Session $pssessions -ScriptBlock {Get-PhysicalDisk}
 
@@ -1381,7 +1381,7 @@ function Windows_Validator {
 														# Get the data for all qlogic HBA ports
 														$qauclioutput = (invoke-Command -Session $pssessions -ArgumentList  $QConvergeCliLocation,$hba_temp_instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -c '$a2'"})
 
-														# Calling to comman function of QLogic HBA checking													
+														# Calling to comman function of QLogic HBA checking
 														if(QLogic_HBA_Settings_Check $qauclioutput) {$bFoundError = $True}
 													}
 													else {
@@ -2030,7 +2030,7 @@ function Linux_Validator {
 						}
 					}
 					else {
-						$command  = "cat /etc/os-release | grep -E '\bID=|\bVERSION_ID='"
+						$command  = "sudo cat /etc/os-release | grep -E '\bID=|\bVERSION_ID='"
 						$Splinter = "="
 						if($bLocalServer) {
 							$Linux_Distro_info = Invoke-Expression $command | Sort-Object
@@ -2203,7 +2203,7 @@ function Linux_Validator {
 					}
 
 					# Print the data
-					DataMessage "kernel version is: $($Kernel_Data)"			 
+					DataMessage "kernel version is: $($Kernel_Data)"
 
 					# Print the CPU & Memory and Kernel Version
 					$command = "lscpu | grep -E '^CPU|Thread|Socket|Core'"
@@ -2218,7 +2218,7 @@ function Linux_Validator {
 					InfoMessage "CPU Server Information is:"
 					handle_string_array_messages ($CPU_Data | Out-String).Trim() "Data"
 
-					$command = "cat /proc/meminfo | grep MemTotal"
+					$command = "sudo cat /proc/meminfo | grep MemTotal"
 					if($bLocalServer) {
 						$Mem_Data = Invoke-Expression $command
 					}
@@ -2319,7 +2319,7 @@ function Linux_Validator {
 					}
 
 					if ($multipathconffileexists -match "true")	{
-						$command = "cat /etc/multipath.conf"
+						$command = "sudo cat /etc/multipath.conf"
 						if($bLocalServer) {
 							$multipathconf = Invoke-Expression $command
 						}
@@ -2581,7 +2581,7 @@ function Linux_Validator {
 					}
 					
 					if($ioschedulersfileexists -match "true") {
-						$command = "cat $($IOschedulersPath)"
+						$command = "sudo cat $($IOschedulersPath)"
 						if($bLocalServer) {
 							$ioschedulers = Invoke-Expression $command
 						}
@@ -2616,7 +2616,7 @@ function Linux_Validator {
 					# LINUX TRIM/UNMAP
 					InfoMessage "$MessageCounter - Running validation for Linux TRIM/UNmap (fstrim) option"
 					
-					$command = "cat /etc/fstab | grep -i 'discard'"
+					$command = "sudo cat /etc/fstab | grep -i 'discard'"
 					if($bLocalServer) {
 						$fstab = Invoke-Expression $command
 					}
@@ -2624,7 +2624,10 @@ function Linux_Validator {
 						$fstab = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
 					}
 					if($fstab) {
-							WarningMessage "Please check if the rows that contain the discard are Silk Devices"
+						WarningMessage "Please check if the rows that contain the discard are Silk Devices"
+							
+						# Write it:
+						handle_string_array_messages ($fstab | Out-String).Trim() "Data"
 					}
 					else {
 						InfoMessage "fstab Silk mount file system not contain rows with discard!"
@@ -2633,30 +2636,39 @@ function Linux_Validator {
 					$MessageCounter++
 					PrintDelimiter
 
-					InfoMessage "$MessageCounter - Running validation for noatime option on debian distro OS"
+					InfoMessage "$MessageCounter - Running validation for noatime option on debian distro OS (Recommended to mount the file system that resides on Silk Data Platform volumes with the noatime option)"
 
-					# Linux Debian Check the noatime Option
+					# Linux Debian Check the noatime Option - Only print the "/etc/fstab" & monut list
 					if(($linuxtype) -match ("debian")) {
-						$command = "cat /etc/fstab | grep -E '/dev/sda7|/chroot'"
+						$command = "which findmnt"
+						
 						if($bLocalServer) {
-							$fstab = Invoke-Expression $command
+							$findmnt = Invoke-Expression $command
 						}
 						else {
-							$fstab = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
+							$findmnt = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
 						}
-
-						if($fstab -match "noatime") {
-							if($fstab -match "noatime.*1 2") {
-								GoodMessage "noatime value is properly configured according to Silk's BP"
+						
+						if($findmnt) {
+							$command1 = "sudo cat /etc/mtab | grep -i /dev/mapper/ | cut -d ' ' -f1"
+							$command  = 'sudo bash -c ''for i in XXXXX ; do echo -ne $(findmnt $i -m -n) "- " ;echo $(udevadm info --query=all --name=$i | grep DM_UUID= | cut -d "=" -f2);done'''
+							
+							if($bLocalServer) {
+								$Device_noatime = ((Invoke-Expression $command1) -join " ").trim()
+								$command = $command.replace("XXXXX",$Device_noatime)
+								$Device_noatime = Invoke-Expression $command
 							}
 							else {
-								BadMessage "fstab Silk mount file system is missing the noatime option"
-								$bFoundError = $True
+								$Device_noatime = ((plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command1) -join " ").trim()
+								$command = $command.replace("XXXXX",$Device_noatime)
+								$Device_noatime = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
 							}
+
+							# Write it:
+							handle_string_array_messages ($Device_noatime | Out-String).Trim() "Data"
 						}
 						else {
-							BadMessage "fstab Silk mount file system is missing the noatime option"
-							$bFoundError = $True
+							WarningMessage "findmnt command is missing, can't check the noatime Option"
 						}
 					}
 					else {
@@ -2700,8 +2712,7 @@ function Linux_Validator {
 											$qaucli_hba = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
 										}
 
-										if($qaucli_hba) {
-											# $qaucli_hba = $qaucli_hba | Select-String "HBA Instance" | select-string "Online"| Select-Object -Property @{ Name = 'Row';  Expression = {$_}}, @{ Name = 'HBA_Instance'; Expression = { $_.ToString().split(" ")[-2].Replace(")","")}}
+										if($qaucli_hba) {											
 											$qaucli_hba = $qaucli_hba | Select-String "HBA Instance" | Select-Object -Property @{ Name = 'Row';  Expression = {$_}}, `
 											@{ Name = 'HBA_Instance'; Expression = { ($_.ToString().split(")")[0].trim().split(" "))[-1]}}, `
 											@{ Name = 'HBA_Status'; Expression = { ($_.ToString().split(")"))[1].trim()}}
@@ -2781,7 +2792,7 @@ function Linux_Validator {
 
 							if($iSCSISession_Data -ne 0) {
 								# Number of sessions per c-node
-								InfoMessage "How iSCSI Sessions distributed between c-nodes"
+								InfoMessage "How iSCSI Sessions distributed between k-nodes"
 								$command = "sudo netstat -antup | grep 3260 | grep ESTABLISHED | tr -s ' ' | cut -f5 -d ' ' | cut -f1 -d ':' | sort | uniq -c"
 								if($bLocalServer) {
 									$iSCSISession_Per_Cnode = Invoke-Expression $command
@@ -2791,7 +2802,7 @@ function Linux_Validator {
 								}
 
 								# Write it:
-								handle_string_array_messages ($iSCSISession_Per_Cnode |out-string).Trim() "Data"
+								handle_string_array_messages ($iSCSISession_Per_Cnode | out-string) "Data"
 							}
 						}
 					}
@@ -2803,7 +2814,7 @@ function Linux_Validator {
 
 					# Multipath Configuration
 					# cat /etc/iscsi/initiatorname.iscsi
-					$command = "sudo multipath -ll | grep -i KMNRIO -A 2"
+					$command = "sudo multipath -ll | grep -E 'KMNRIO|SILK' -A 2"
 					if($bLocalServer) {
 						$Multipath_dm_data = Invoke-Expression $command
 					}
@@ -2814,10 +2825,15 @@ function Linux_Validator {
 					# Write it:
 					handle_string_array_messages ($Multipath_dm_data | Out-String).Trim() "Data"
 
+					$MessageCounter++
+					PrintDelimiter
+
+					InfoMessage "$MessageCounter - Devices UDEV Setttings Section"
+
 					# Verify that the scheduler is configured to noop and to 1024/4096
 					InfoMessage "UDEV Rules settings per dm device (If there is)"
-					$command1 = 'sudo multipath -ll | grep KMNRIO | awk ''{print $3}'' | sort -n'
-					$command  = 'sudo bash -c ''for dm in XXXXX ; do (echo -ne "$dm" - ; echo $(sudo cat /sys/class/block/"$dm"/queue/scheduler; sudo cat /sys/class/block/"$dm"/queue/max_sectors_kb)) ;done | sort -n'''					
+					$command1 = "sudo multipath -ll | grep -E 'KMNRIO|SILK' | grep -ao 'dm-\S*' | sort -n"					
+					$command  = 'sudo bash -c ''for dm in XXXXX ; do (echo -ne "$dm" - ; echo $(sudo cat /sys/class/block/"$dm"/queue/scheduler; sudo cat /sys/class/block/"$dm"/queue/max_sectors_kb)) ;done | sort -n'''
 					if($bLocalServer) {
 						$Device_IO_Rule = ((Invoke-Expression $command1) -join " ").trim()
 						$command = $command.replace("XXXXX",$Device_IO_Rule)
@@ -2830,7 +2846,7 @@ function Linux_Validator {
 					}
 
 					# Write it:
-					handle_string_array_messages ($Device_IO_Rule |Out-String).Trim() "Data"					
+					handle_string_array_messages ($Device_IO_Rule | Out-String).Trim() "Data"
 					
 					$MessageCounter++
 					PrintDelimiter
