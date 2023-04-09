@@ -19,7 +19,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "3.0.0"
+[string]$SDP_Version = "3.0.0.5"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "Dot6"
@@ -3054,12 +3054,9 @@ else {
 						}
 						else {
 							# Choose user for the validator
-							$WinCredential = read-host ("Windows Credential - using $(whoami) Login user (Y/N), N = or diffrenet user")
-
-							while (($WinCredential -notmatch "[yY]") -and ($WinCredential -notmatch "[nN]")) {
-								write-host -ForegroundColor Red "Invalid entry, please enter 'Y' or 'N' to continue"
-								$WinCredential = read-host ("Windows Credential - using $(whoami) Login user (Y/N), N = or diffrenet user")
-							}
+							do {
+								$WinCredential = Read-Host "Windows Credential - using $(whoami) Login user (Y/N), N = or different user"
+							} while (($WinCredential -NotMatch "[yY]") -and ($WinCredential -NotMatch "[nN]"))
 							
 							# Summary Data - Number of arrays
 							$script:NumOfHosts = $WindowsServerarray.Count
