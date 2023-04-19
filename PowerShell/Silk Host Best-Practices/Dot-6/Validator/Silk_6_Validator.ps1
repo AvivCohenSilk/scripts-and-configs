@@ -1,6 +1,6 @@
 <#
     ===========================================================================================================================================
-    Release version: 3.0.0.5
+    Release version: 3.0.0.6
     -------------------------------------------------------------------------------------------------------------------------------------------
     Maintained by:  Aviv.Cohen@Silk.US
     Organization:   Silk.us, Inc.
@@ -19,7 +19,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "3.0.0.5"
+[string]$SDP_Version = "3.0.0.6"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "Dot6"
@@ -389,8 +389,7 @@ function VMware_Validator {
 		# Connection VMware Section
 		Try {
 			# Validate PowerCLI exists and in use
-			if(ValidatePowerCLI) {
-				
+			if(ValidatePowerCLI) {				
 				PrintDelimiter
 
 				# PowerCLI Configure general variables 
@@ -867,7 +866,7 @@ function VMware_Validator {
 
 #region Windows_Validator
 function Windows_Validator {
-	[cmdletbinding()] 
+	[cmdletbinding()]
 	Param(	
 		[parameter()][String[]]$WinServerArray,	
 		[System.Management.Automation.PSCredential]	
@@ -1046,7 +1045,7 @@ function Windows_Validator {
 						handle_string_array_messages $MPIO_out "Data"
 
 						# Checking the MSDSM supported hardware list
-						$MSDSMSupportedHW = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW})
+						$MSDSMSupportedHW     = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW})
 						$MSDSMSupportedHW_out = ($MSDSMSupportedHW | Select-Object ProductId, VendorId | Format-Table * -AutoSize | Out-String).Trim()
 
 						# Print the MPIO Settings
@@ -1190,8 +1189,17 @@ function Windows_Validator {
 					InfoMessage "$MessageCounter - Running validation for Load Balance and Failover Policy for Individual Volumes"
 
 					# Get all disks and their associated physical disks by SerialNumber (using with CimSession for local and remote servers)
-					$disks = invoke-Command -Session $pssessions -ScriptBlock {Get-Disk | Select-Object SerialNumber,Number, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle | Where-Object {($_.FriendlyName -match "KMNRIO K2") -OR ($_.FriendlyName -match "SILK K2") -OR ($_.FriendlyName -match "SILK SDP")}}
-					$physicalDisks = invoke-Command -Session $pssessions -ScriptBlock {Get-PhysicalDisk}
+					$SilkFriendlyNames = @("KMNRIO K2","SILK K2","SILK SDP")					
+					$disks = invoke-Command -Session $pssessions -ArgumentList $SilkFriendlyNames -ScriptBlock {param($arr) Get-Disk | Where-Object {
+						$diskName = $_.FriendlyName
+						$arr | ForEach-Object {
+							$pattern = [regex]::Escape($_)
+							if ($diskName -match $pattern) {
+								return $true
+							}
+						}
+					} | Select-Object SerialNumber,Number, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle}
+					$physicalDisks     = invoke-Command -Session $pssessions -ScriptBlock {Get-PhysicalDisk}
 
 					# Create an empty array to store the combined data
 					$server_diskInfo = @()
@@ -1224,7 +1232,7 @@ function Windows_Validator {
 							CanPool      = $physicalDisk.CanPool
 							OperationalStatus = $physicalDisk.OperationalStatus
 							HealthStatus = $physicalDisk.HealthStatus
-							SizeGB         = [math]::Round($disk.Size/1GB,4)
+							SizeGB       = [math]::Round($disk.Size/1GB,4)
 							DriveLetter  = $driveLetter
 							DiskStatus   = $disk.OperationalStatus
 							PartitionStyle = $disk.PartitionStyle
@@ -1242,7 +1250,7 @@ function Windows_Validator {
 						# Print the MPIO into the html
 						handle_string_array_messages $Server_KMNRIO_PD_out "Data"
 
-						foreach ($PD_Temp in $server_diskInfo )	{
+						foreach ($PD_Temp in $server_diskInfo)	{
 							# Check for each Individual if it LQD or not
 							if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth")	{
 								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
@@ -1404,7 +1412,8 @@ function Windows_Validator {
 						"iscsi" {
 							#validating iSCSI BP
 							InfoMessage "$MessageCounter - Running validation for iSCSI configuration"
-							$MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
+							# $MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name ='MSiSCSI'"})
+							$MSiSCSI = Get-CimInstance Win32_Service -Filter 'Name = "MSiSCSI"' -CimSession $CIMsession
 							if($MSiSCSI) {
 								if ($MSiSCSI.State -match "Running") {
 									GoodMessage "MSiSCSI service is running"
@@ -1646,8 +1655,8 @@ function Linux_Validator {
 
 			if ($Plink_command) {
 				$Plink_min_version =  0.74
-				$Plink_Source  = $Plink_command.Source
-				$Plink_release = (&$plink_source -V | select-string "plink: Release").ToString().replace("plink: Release ","").trim()
+				$Plink_Source      = $Plink_command.Source
+				$Plink_release     = (&$plink_source -V | select-string "plink: Release").ToString().replace("plink: Release ","").trim()
 				
 				# Check if the version is only numbers
 				if($Plink_release -match "^[\d\.]+$") {
@@ -1980,7 +1989,7 @@ function Linux_Validator {
 			$MessageCurrentObject = $Server
 			
 			if (-not (Test-Connection -ComputerName $Server -Count 2 -Quiet)) {
-				BadMessage "Linux server $($Server) not responding to ping, skipping this server."
+				WarningMessage "Linux server $($Server) not responding to ping, skipping this server."
 				$script:NumOfUnreachableHosts += 1
 			}
 			else {
@@ -3090,8 +3099,6 @@ else {
 				InfoMessage "Time - Validator starting time is - $($bDate)"
 				InfoMessage "Time - Validator ending time is - $($eDate)"
 				InfoMessage "Time - Validator total time (Sec) - $($tDate.TotalSeconds)"
-
-				$($tDate.TotalSeconds)
 
 				# Generate HTML Report File
 				$SDPBPHTMLBody += "<div id='host_space'></div>"
