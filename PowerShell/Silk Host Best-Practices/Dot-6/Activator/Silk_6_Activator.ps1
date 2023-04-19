@@ -1,36 +1,16 @@
 <#
- .SYNOPSIS
- This script gets various arguments and checks the Silk BP against the input.
-
- .DESCRIPTION
- This script gets a Host Type as inputs and validation according to Silk's best practices. 
- This script validates VMware, Linux, and Windows OS tpyes.
-
- Versions:  
-  May-2021 - Current version V1.6.6
-  Jun-2021 - Current version V1.7.0
-  Aug-2021 - Current version V2.0.0
-  Dec-2021 - Current version V2.0.4
-  Jan-2022 - Current version V2.1.0
-  Feb-2022 - Current version V2.1.1
-  Mar-2022 - Current version V2.2.0
-  May-2022 - Current version V2.2.1
-  Jun-2022 - Current version V2.2.3
-  Jul-2022 - Current version V2.2.4
-    
- .NOTES  
-  Mar 2022
-  * (Lin) Fix Fix Multipath.conf and udev rules create from Windows/Linux OS. 	
-
-  May 2022
-  * (Win) Checking and Validate the CTRL LU
-  * (ESX) Fix the SATP pspoption to support policy options
-
-  Jun 2022
-  * (Lin) Fixing open-iscsi and iscsid handling
-  
-  Jul 2022
-  * (Win) Added activation regarding TRIM/Unmap in Windows.
+    ===========================================================================================================================================
+    Release version: 3.0.0.0
+    -------------------------------------------------------------------------------------------------------------------------------------------
+    Maintained by:  Aviv.Cohen@Silk.US
+    Organization:   Silk.us, Inc.
+    Filename:       Silk_6_Activator.ps1
+    As Known As:    Silk Dot 6 Activator PowerShell Script
+    Copyright       (c) 2023 Silk.us, Inc.
+    Description:    Activate and align Initiator with Silk Best Practices settings
+	Host Types:     Valid for VMware, Windows , Linux environments
+    ------------------------------------------------------------------------------------------------------------------------------------------
+    ===========================================================================================================================================
 #>
 
 <#
@@ -50,7 +30,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Validator begin of the script - Activator #####################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.2.4"
+[string]$SDP_Version = "3.0.0.0"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "Dot6"
@@ -59,8 +39,8 @@ We strongly recommend for the activator script is to execute during the followin
 if($PSVersionTable.PSEdition -eq "Core" ) {
 	if ($PSVersionTable.PSVersion.Major -ge 7) {
 		# Platform Section - Powershell Core 7 (Win32NT / Unix)
-		if(!($Platfrom_Windows)){Set-Variable Platfrom_Windows -option Constant -Scope Script -value "Win32NT"}
-		if(!($Platfrom_Linux)){Set-Variable Platfrom_Linux -option Constant -Scope Script -value "Unix"}
+		if(!($Platfrom_Windows)) {Set-Variable Platfrom_Windows -option Constant -Scope Script -value "Win32NT"}
+		if(!($Platfrom_Linux)) {Set-Variable Platfrom_Linux -option Constant -Scope Script -value "Unix"}
 		$PSPlatform = $PSVersionTable.Platform	
 	}
 	else {
@@ -121,14 +101,14 @@ Function InfoMessage {
 
 Function DataMessage {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
-	Write-host "$($MessageCurrentObject) - [Data] - $args"
+	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor
 	$SDPBPHTMLBody += "<div id='DataMessage'>$($MessageCurrentObject) - [Data] - $args</div>"
 }
 
 Function DataMessageBlock {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
-	Write-host "$($MessageCurrentObject) - [Data] - $args"
+	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor	
 	$SDPBPHTMLBody += "<div id='DataMessage'><p id='whitepreclass'>$args</p></div>"
 }
@@ -319,6 +299,7 @@ Function UserSelections {
 ##################################### Activator Main functions ##################################################################
 #region ESXI Activator as subfunction
 function VMware_Activator {
+	[cmdletbinding()]
 	Param(
 		[parameter()][String]$vCenter,
 		[parameter()][String]$Cluster,
@@ -491,16 +472,18 @@ function VMware_Activator {
 					# add a spacer for the HTML output 
 					PrintDelimiter
 					$SDPBPHTMLBody += "<div id='host_space'></div>"
-
-					continue  # <- skip just this iteration, but continue loop
 				}
 				else {
 
 					# Get the ESXi version
 					$esxVersion = Get-VMHost -Name $vmhost | Select-Object Version,Build
-					InfoMessage "ESXi version $($esxVersion.Version) build $($esxVersion.Build)"
+					InfoMessage "$MessageCounter - ESXi version $($esxVersion.Version) build $($esxVersion.Build)"
+
+					$MessageCounter++
+					PrintDelimiter
 
 					# Configure Disk.SchedQuantum
+					# ===========================
 					if ($SchedQuantum) {
 						InfoMessage "$MessageCounter - Running Activation for Disk.SchedQuantum"
 						$SchedQuantum_Silk_BP_Value = 64
@@ -523,6 +506,7 @@ function VMware_Activator {
 					PrintDelimiter
 
 					# Configure Disk.DiskMaxIOSize
+					# ============================
 					if ($MaxIO) {
 						InfoMessage "$MessageCounter - Running Activation for Disk.DiskMaxIOSize"
 						$DiskMaxIOSize_Silk_BP_Value = 1024
@@ -545,6 +529,7 @@ function VMware_Activator {
 					PrintDelimiter
 
 					# Configure Disk.SchedNumReqOutstanding
+					# =====================================
 					if ($SchedNumReqOutstanding) {
 						InfoMessage "$MessageCounter - Running activation for Disk.SchedNumReqOutstanding"
 						$SchedNumReqOutstandingBP = 32
@@ -595,7 +580,8 @@ function VMware_Activator {
 					$MessageCounter++
 					PrintDelimiter
 
-					# Configure Qlogic 
+					# Configure Qlogic
+					# ================
 					if ($systemConnectivitytype -eq "fc") {
 						InfoMessage "$MessageCounter - Running activation for FC settings"
 						if ($Qlogic) {
@@ -631,6 +617,7 @@ function VMware_Activator {
 					PrintDelimiter
 
 					# Configure VAAI
+					# ==============
 					if ($VAAI) {
 						InfoMessage "$MessageCounter - Running activation for VAAI Primitives"
 						$HardwareAcceleratedMove    = $vmhost | Get-AdvancedSetting -Name DataMover.HardwareAcceleratedMove
@@ -672,6 +659,7 @@ function VMware_Activator {
 					PrintDelimiter
 
 					# Confiugre Round Robin for pre-allocated SDP volumes
+					# ====================================================
 					if ($RoundRobin) {
 						InfoMessage "$MessageCounter - Running activation for Round-Robin (Multipath configuration)"
 
@@ -710,7 +698,8 @@ function VMware_Activator {
 					$MessageCounter++
 					PrintDelimiter
 
-					# Configure SATP rule 
+					# Configure SATP rule
+					# ===================
 					if ($SATP) {
 						InfoMessage "$MessageCounter - Running activation for SATP"
 						$esxcli = Get-EsxCli -VMHost $vmhost -V2
@@ -753,6 +742,7 @@ function VMware_Activator {
 					PrintDelimiter
 					
 					#Enable Block Delete
+					# ==================
 					if ($EnableBlockDelete) {
 						InfoMessage "$MessageCounter - Running activation for EnableBlockDelete"
 						if ($esxVersion.Version -ge 6) {
@@ -778,6 +768,7 @@ function VMware_Activator {
 					PrintDelimiter
 				
 					# Configure CBRC and cache size
+					# =============================
 					if ($CBRC) {
 						InfoMessage "$MessageCounter - Running activation for CBRC"
 						$CBRCEnable = $vmhost | Get-AdvancedSetting -Name CBRC.Enable
@@ -811,13 +802,13 @@ function VMware_Activator {
 					else {
 						InfoMessage "$MessageCounter - Skipping VMware CBRC configuration"
 					}
-
-					InfoMessage "Activation for $($vmhost) completed."
-					
-					# add a spacer for the HTML output 
-					PrintDelimiter
-					$SDPBPHTMLBody += "<div id='host_space'></div>"
 				}
+
+				InfoMessage "Validation for $($vmhost) completed."
+				
+				# add a spacer for the HTML output 
+				PrintDelimiter
+				$SDPBPHTMLBody += "<div id='host_space'></div>"
 			}
 		}
 	}
@@ -850,13 +841,75 @@ function VMware_Activator {
 #region Windows_Activator
 #Windows Activator as subfunction
 function Windows_Activator {
+	[cmdletbinding()]
 	Param(
-		[parameter()]
-		[String[]]$WinServerArray,
+		[parameter()][String[]]$WinServerArray,
 		[System.Management.Automation.PSCredential]	
 		$Credential = [System.Management.Automation.PSCredential]::Empty
 		)
 	
+	
+	#region RemoteServerDiskInfo	
+	Function RemoteServerDiskInfo {
+		param (
+			[parameter()]$pssessions_local,
+			[parameter()]$cimsession_local
+			)
+
+		# Get all disks and their associated physical disks by SerialNumber (using with CimSession for local and remote servers)
+		$SilkFriendlyNames = @("KMNRIO K2","SILK K2","SILK SDP")
+		$disks = invoke-Command -Session $pssessions_local -ArgumentList $SilkFriendlyNames -ScriptBlock {param($arr) Get-Disk | Where-Object {
+			$diskName = $_.FriendlyName
+			$arr | ForEach-Object {
+				$pattern = [regex]::Escape($_)
+				if ($diskName -match $pattern) {
+					return $true
+				}
+			}
+		} | Select-Object SerialNumber,Number, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle}
+		$physicalDisks     = invoke-Command -Session $pssessions_local -ScriptBlock {Get-PhysicalDisk}
+
+		# Create an empty array to store the combined data
+		$server_diskInfo = @()
+
+		# Loop through each disk and find its associated physical disk by SerialNumber,
+		# Foreach disk we find the PhysicalDiskStorageNodeView and Partition (if exist)
+		foreach ($disk in $disks) {
+			$serialNumber = $disk.SerialNumber
+			$physicalDisk = $physicalDisks | Where-Object { $_.SerialNumber -eq $serialNumber }
+			$PhysicalDiskStorageNodeView = get-PhysicalDiskStorageNodeView -CimSession $cimsession_local -PhysicalDisk $physicalDisk
+			$disknumber   = $null
+			$disknumber   = $disk.Number
+			
+			if($disknumber)	{
+				$partitions  = Get-Partition -CimSession $cimsession_local -DiskNumber $disknumber -ErrorAction SilentlyContinue
+				$partition   = $partitions | Where-Object {$_.AccessPaths -ne $null}
+				$driveLetter = $null
+				
+				if ($partition) {
+					$driveLetter = $partition.DriveLetter -join ","
+				}
+			}
+			
+			$combinedDisk = [PSCustomObject]@{
+				DeviceId     = $physicalDisk.DeviceId
+				DiskNumber   = $disknumber
+				SerialNumber = $serialNumber
+				FriendlyName = $disk.FriendlyName
+				LoadBalancePolicy = $PhysicalDiskStorageNodeView.LoadBalancePolicy
+				CanPool      = $physicalDisk.CanPool
+				OperationalStatus = $physicalDisk.OperationalStatus
+				HealthStatus = $physicalDisk.HealthStatus
+				SizeGB       = [math]::Round($disk.Size/1GB,4)
+				DriveLetter  = $driveLetter
+				DiskStatus   = $disk.OperationalStatus
+				PartitionStyle = $disk.PartitionStyle
+			}
+			$server_diskInfo += $combinedDisk
+		}
+		return $server_diskInfo
+	}
+
 	# Start script initialization
 	# We will use the vmhost variable as a dummy to hold the "Initialization" string.
 	$MessageCurrentObject = "Windows Activation"
@@ -906,7 +959,7 @@ function Windows_Activator {
 			
 			# Check that we can pinh to the remote server
 			if (-not (Test-Connection -ComputerName $WinServer -Count 2 -Quiet)) {
-				BadMessage "The Windows Server $($WinServer) not responding to ping, skipping this server."
+				WarningMessage "The Windows Server $($WinServer) not responding to ping, skipping this server."
 			}
 			else {
 				# Write that ping was sucessfully
@@ -914,780 +967,757 @@ function Windows_Activator {
 
 				if($bool_local_user) {
 					$pssessions = New-PSSession
+					$CIMsession = New-CimSession
 				}
 				else {
 					# Initialization pssessions
 					if($Credential -ne [System.Management.Automation.PSCredential]::Empty) {
-						$pssessions = New-PSSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction Stop
+						$pssessions = New-PSSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction SilentlyContinue
+						$CIMsession = New-CimSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction SilentlyContinue
 					}
 					else {
-						$pssessions = New-PSSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction Stop
+						$pssessions = New-PSSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction SilentlyContinue
+						$CIMsession = New-CimSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction SilentlyContinue
 					}
 				}
-				
-				# Reseting the counter message sections
-				[int]$MessageCounter = 1
-
-				# write to html the OS version and caption
-				InfoMessage "$MessageCounter - Windows Server Information"
-				$WinOSVersionCaption = (Invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -class Win32_OperatingSystem).Caption})
-				$WinOSVersion        = (Invoke-Command -Session $pssessions -ScriptBlock {[Environment]::OSVersion})
-				InfoMessage "Windows OS Caption is - $($WinOSVersionCaption)"
-				InfoMessage "Windows OS Version is - $($WinOSVersion.VersionString)"
-
-				# Write the Windows Server Extra data (CPU & Memory)
-				$WinOSCPU    = (Invoke-Command -Session $pssessions -ScriptBlock {(Get-CimInstance Win32_ComputerSystem)})
-				$WinOSMemory = (Invoke-Command -Session $pssessions -ScriptBlock {((Get-CimInstance CIM_PhysicalMemory).Capacity | Measure-Object -Sum).Sum / (1024 * 1024 * 1024)})
-
-				DataMessage "Number Of Processors (Sockets) - $($WinOSCPU.NumberOfProcessors)"
-				DataMessage "Number Of Logical Processors (vCPUs) - $($WinOSCPU.NumberOfLogicalProcessors)"
-				DataMessage "Total Physical Memory (GiB) - $($WinOSMemory)"
-
-				$MessageCounter++
-				PrintDelimiter 
-
-				# Global Windows Parameters
-				$Qlogic                = $false
-				$ISCSI_Service         = $false
-				$ISCSI_Network_Adapter = $false
-
-				# FC / iSCSI Section
-				if($systemConnectivitytype -eq "FC") {
-					PrintDescription "Category: Performance related.`nParameter type: The HBA settings are global parameters and may impact other attached storage arrays.`nDescription: The HBA settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
-					$Qlogic = UserSelections "Qlogic" "Operation Mode=6 | Interrupt Delay Timer=1 | Execution Throttle=400"
+				# Check if we were able to connect via PSSession or CimSession
+				if ([string]::IsNullOrEmpty($pssessions)) {
+					$script:NumOfUnreachableHosts += 1
+					WarningMessage "The windows Server $($WinServer) New-PSSession not able to establish (Check the WinRM in the remote server), skipping this server..."
+					
+				}
+				elseif ([string]::IsNullOrEmpty($CIMsession)) { 
+					$script:NumOfUnreachableHosts += 1
+					WarningMessage "The windows Server $($WinServer) New-CimSession not able to establish (Check the WinRM in the remote server), skipping this server..."
 				}
 				else {
-					PrintDescription "Category: SAN Connectivity related.`nParameter type: The ISCSI settings are global parameters and may impact other attached storage arrays.`nDescription: The ISCSI settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
-					$ISCSI_Service = UserSelections "ISCSI" "Configuring iSCSI services"
-					$ISCSI_Network_Adapter = UserSelections "ISCSI" "Configuring iSCSI network Adapter"
-				}
 
-				# MPIO Section
-				PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: The MPIO framework settings are global parameters and may impact other attached storage arrays.`nDescription: The MPIO framework settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
-				$MPIO_Installation = UserSelections "MPIO " "Installing Multipath-IO"
-				$MPIO_Configuration = UserSelections "MPIO Configuration" "configure MPIO parameters"
-				
-				# Settings LQD Silk Disk
-				PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: Disk Load Balance Policy Settings.`nDescription: Setting the Silk Disks Load Balance Policy to Least Queue Depth (LQD)" 
-				$MPIO_LoadBalancePolicy = UserSelections "MPIO " "Disk Load Balance Policy (LQD)"
+					# Reseting the counter message sections
+					[int]$MessageCounter = 1
 
-				# Settings CTRL Silk Disk OFFLINE
-				PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets" 
-				$CTRL_LU_Offline = UserSelections "Management Lugical Unit" "CTRL Silk Disk"
+					# Global Windows Parameters
+					$Qlogic                = $false
+					$ISCSI_Service         = $false
+					$ISCSI_Network_Adapter = $false
 
-				# Windows TRIM/Unmap
-				PrintDescription "Category: Performance related.`nParameter type: TRIM / UNmap Disablie Disable Delete Notification.`nDescription: The TRIM functionality within Windows is controlled by a registry setting. By default, the setting is enabled which effectively enables auto-unmap."
-				$WinTrimUnmapRegistry = UserSelections "Trim / UNmap" "Disable Delete Notification Key"				
+					# FC / iSCSI Section
+					if($systemConnectivitytype -eq "FC") {
+						PrintDescription "Category: Performance related.`nParameter type: The HBA settings are global parameters and may impact other attached storage arrays.`nDescription: The HBA settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
+						$Qlogic = UserSelections "Qlogic" "Operation Mode=6 | Interrupt Delay Timer=1 | Execution Throttle=400"
+					}
+					else {
+						PrintDescription "Category: SAN Connectivity related.`nParameter type: The ISCSI settings are global parameters and may impact other attached storage arrays.`nDescription: The ISCSI settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
+						$ISCSI_Service = UserSelections "ISCSI" "Configuring iSCSI services"
+						$ISCSI_Network_Adapter = UserSelections "ISCSI" "Configuring iSCSI network Adapter"
+					}
 
-				# Defragmentation Scheduled Task
-				PrintDescription "Category: Performance related.`nParameter type: Disablie Disk Defragmentation Scheduled Task.`nDescription: In a Windows, Hyperv and even Windows server run as a virtual Machine on ESX environments, it is recommended to Disable Disk Fragmentation Scheduled Task (ScheduledDefrag) to avoid performance issues"
-				$Defragmentation = UserSelections "Defragmentation" "Disable Scheduled Task"
+					# MPIO Section
+					PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: The MPIO framework settings are global parameters and may impact other attached storage arrays.`nDescription: The MPIO framework settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
+					$MPIO_Installation = UserSelections "MPIO " "Installing Multipath-IO"
+					$MPIO_Configuration = UserSelections "MPIO Configuration" "configure MPIO parameters"
+					
+					# Settings LQD Silk Disk
+					PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: Disk Load Balance Policy Settings.`nDescription: Setting the Silk Disks Load Balance Policy to Least Queue Depth (LQD)" 
+					$MPIO_LoadBalancePolicy = UserSelections "MPIO " "Disk Load Balance Policy (LQD)"
 
-				# Configure FC / ISCSI Settings
-				if($systemConnectivitytype -eq "FC") {
-					if($Qlogic)	{
-						InfoMessage "$MessageCounter - Running activation for FC Qlogic service"
-						# Find location of the qLogic installation
-						$QConvergeCliLocation  = (invoke-Command -Session $pssessions -ScriptBlock {(get-command qaucli.exe).source})
+					# Settings CTRL Silk Disk OFFLINE
+					PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets" 
+					$CTRL_LU_Offline = UserSelections "Management Lugical Unit" "CTRL Silk Disk"
 
-						if(!$QConvergeCliLocation) {
-							BadMessage "qconvergeconsole cli (qaucli.exe) tool is not installed, qaucli is mandatory (and found on system path) for extracting the QLogic parameters"
-						}
-						else {
-							$qauclioutput_hba = (invoke-Command -Session $pssessions -Args $QConvergeCliLocation -ScriptBlock {Invoke-Expression "& '$args' -pr fc -g"})
-							$qauclioutput_hba = $qauclioutput_hba | Select-String "HBA Instance" | select-string "Online"| Select-Object -Property @{ Name = 'Row';  Expression = {$_}}, @{ Name = 'HBA_Instance'; Expression = { $_.ToString().split(" ")[-2].Replace(")","")}}
-							
-							$HBA_Online_Array = @()
-							foreach($qauclioutput_hba_item in $qauclioutput_hba)
-							{
-								$obj = New-Object -TypeName PSObject
-								$obj | Add-Member -MemberType NoteProperty -Name Row -Value $qauclioutput_hba_item.Row.ToString().Trim()
-								$obj | Add-Member -MemberType NoteProperty -Name HBA_Instance -Value $qauclioutput_hba_item.HBA_Instance
-								$HBA_Settings = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$qauclioutput_hba_item.HBA_Instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -c '$a2'"}) | Select-String "^Operation Mode|^Interrupt Delay Timer|^Execution Throttle"
-								$HBA_Settings_Operation_Mode        = ($HBA_Settings -match "^Operation Mode").line.split(":")[1].trim()
-								$HBA_Settings_Interrupt_Delay_Timer = ($HBA_Settings -match "^Interrupt Delay Timer").line.split(":")[1].trim()
-								$HBA_Settings_Execution_Throttle    = ($HBA_Settings -match "^Execution Throttle").line.split(":")[1].trim()
-								$obj | Add-Member -MemberType NoteProperty -Name Operation_Mode -value $HBA_Settings_Operation_Mode
-								$obj | Add-Member -MemberType NoteProperty -Name Interrupt_Delay_Timer -value $HBA_Settings_Interrupt_Delay_Timer
-								$obj | Add-Member -MemberType NoteProperty -Name Execution_Throttle -value $HBA_Settings_Execution_Throttle
-										
-								$HBA_Online_Array += $obj
+					# Windows TRIM/Unmap
+					PrintDescription "Category: Performance related.`nParameter type: TRIM / UNmap Disablie Disable Delete Notification.`nDescription: The TRIM functionality within Windows is controlled by a registry setting. By default, the setting is enabled which effectively enables auto-unmap."
+					$WinTrimUnmapRegistry = UserSelections "Trim / UNmap" "Disable Delete Notification Key"				
+
+					# Defragmentation Scheduled Task
+					PrintDescription "Category: Performance related.`nParameter type: Disablie Disk Defragmentation Scheduled Task.`nDescription: In a Windows, Hyperv and even Windows server run as a virtual Machine on ESX environments, it is recommended to Disable Disk Fragmentation Scheduled Task (ScheduledDefrag) to avoid performance issues"
+					$Defragmentation = UserSelections "Defragmentation" "Disable Scheduled Task"
+
+					# Configure FC / ISCSI Settings
+					if($systemConnectivitytype -eq "FC") {
+						if($Qlogic)	{
+							InfoMessage "$MessageCounter - Running activation for FC Qlogic service"
+							# Find location of the qLogic installation
+							$QConvergeCliLocation  = (invoke-Command -Session $pssessions -ScriptBlock {(get-command qaucli.exe).source})
+
+							if(!$QConvergeCliLocation) {
+								BadMessage "qconvergeconsole cli (qaucli.exe) tool is not installed, qaucli is mandatory (and found on system path) for extracting the QLogic parameters"
 							}
-							
-							# Print to the HTML report all Online reports
-							handle_string_array_messages ($HBA_Online_Array | Format-Table -AutoSize | Out-String).trim() "Data"
+							else {
+								$qauclioutput_hba = (invoke-Command -Session $pssessions -Args $QConvergeCliLocation -ScriptBlock {Invoke-Expression "& '$args' -pr fc -g"})
+								$qauclioutput_hba = $qauclioutput_hba | Select-String "HBA Instance" | select-string "Online"| Select-Object -Property @{ Name = 'Row';  Expression = {$_}}, @{ Name = 'HBA_Instance'; Expression = { $_.ToString().split(" ")[-2].Replace(")","")}}
+								
+								$HBA_Online_Array = @()
+								foreach($qauclioutput_hba_item in $qauclioutput_hba)
+								{
+									$obj = New-Object -TypeName PSObject
+									$obj | Add-Member -MemberType NoteProperty -Name Row -Value $qauclioutput_hba_item.Row.ToString().Trim()
+									$obj | Add-Member -MemberType NoteProperty -Name HBA_Instance -Value $qauclioutput_hba_item.HBA_Instance
+									$HBA_Settings = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$qauclioutput_hba_item.HBA_Instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -c '$a2'"}) | Select-String "^Operation Mode|^Interrupt Delay Timer|^Execution Throttle"
+									$HBA_Settings_Operation_Mode        = ($HBA_Settings -match "^Operation Mode").line.split(":")[1].trim()
+									$HBA_Settings_Interrupt_Delay_Timer = ($HBA_Settings -match "^Interrupt Delay Timer").line.split(":")[1].trim()
+									$HBA_Settings_Execution_Throttle    = ($HBA_Settings -match "^Execution Throttle").line.split(":")[1].trim()
+									$obj | Add-Member -MemberType NoteProperty -Name Operation_Mode -value $HBA_Settings_Operation_Mode
+									$obj | Add-Member -MemberType NoteProperty -Name Interrupt_Delay_Timer -value $HBA_Settings_Interrupt_Delay_Timer
+									$obj | Add-Member -MemberType NoteProperty -Name Execution_Throttle -value $HBA_Settings_Execution_Throttle
+											
+									$HBA_Online_Array += $obj
+								}
+								
+								# Print to the HTML report all Online reports
+								handle_string_array_messages ($HBA_Online_Array | Format-Table * -AutoSize | Out-String).trim() "Data"
 
-							# Show to the customer only HBA that need to be change
-							$HBA_Online_Array_Change = $null
-							$HBA_Online_Array_Change = $HBA_Online_Array | Where-Object {($_.Operation_Mode -ne "6 - Interrupt when Interrupt Delay Timer expires") -or ($_.Interrupt_Delay_Timer -ne 1) -or ($_.Execution_Throttle -ne 400)} 
-							if($HBA_Online_Array_Change) {
-								$HBA_Online_Array_Change | Format-Table -autosize
-								$confirmation = Read-Host "Select specified HBA instance number or select all instances (999)"
+								# Show to the customer only HBA that need to be change
+								$HBA_Online_Array_Change = $null
+								$HBA_Online_Array_Change = $HBA_Online_Array | Where-Object {($_.Operation_Mode -ne "6 - Interrupt when Interrupt Delay Timer expires") -or ($_.Interrupt_Delay_Timer -ne 1) -or ($_.Execution_Throttle -ne 400)} 
+								if($HBA_Online_Array_Change) {
+									$HBA_Online_Array_Change | Format-Table * -autosize
+									$confirmation = Read-Host "Select specified HBA instance number or select all instances (999)"
 
-								if($confirmation -eq 999) {
-									foreach ($HBA_Online_Array_Change_item in $HBA_Online_Array_Change) {
-										$temp_HBA_Instance = $HBA_Online_Array_Change_item.HBA_Instance
-										$qlogic_hba_OM = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$temp_HBA_Instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' OM 6"})
+									if($confirmation -eq 999) {
+										foreach ($HBA_Online_Array_Change_item in $HBA_Online_Array_Change) {
+											$temp_HBA_Instance = $HBA_Online_Array_Change_item.HBA_Instance
+											$qlogic_hba_OM = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$temp_HBA_Instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' OM 6"})
+											InfoMessage $qlogic_hba_OM
+											$qlogic_hba_ID = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$temp_HBA_Instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' ID 1"})
+											InfoMessage $qlogic_hba_ID
+											$qlogic_hba_ET = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$temp_HBA_Instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' ET 400"})
+											InfoMessage $qlogic_hba_ET 
+											$bNeedReboot = $true
+										}
+									}
+									else {
+										$qlogic_hba = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -c '$a2'"})
+										
+										while (($qlogic_hba -eq "Unable to locate the specified HBA!") -or ($qlogic_hba -match "Unrecognized"))	{
+											WarringMessage "Unable to locate the specified HBA instance!, skipping configuration for QLogic section, try again."
+											$confirmation = Read-Host "Select specified HBA instance number"
+											$qlogic_hba = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -c '$a2'"})
+										}
+
+										$qlogic_hba_OM = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' OM 6"})
 										InfoMessage $qlogic_hba_OM
-										$qlogic_hba_ID = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$temp_HBA_Instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' ID 1"})
+										$qlogic_hba_ID = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' ID 1"})
 										InfoMessage $qlogic_hba_ID
-										$qlogic_hba_ET = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$temp_HBA_Instance -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' ET 400"})
+										$qlogic_hba_ET = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' ET 400"})
 										InfoMessage $qlogic_hba_ET 
 										$bNeedReboot = $true
 									}
 								}
-								else {
-									$qlogic_hba = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -c '$a2'"})
-									
-									while (($qlogic_hba -eq "Unable to locate the specified HBA!") -or ($qlogic_hba -match "Unrecognized"))	{
-										WarringMessage "Unable to locate the specified HBA instance!, skipping configuration for QLogic section, try again."
-										$confirmation = Read-Host "Select specified HBA instance number"
-										$qlogic_hba = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -c '$a2'"})
-									}
-
-									$qlogic_hba_OM = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' OM 6"})
-									InfoMessage $qlogic_hba_OM
-									$qlogic_hba_ID = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' ID 1"})
-									InfoMessage $qlogic_hba_ID
-									$qlogic_hba_ET = (invoke-Command -Session $pssessions -ArgumentList $QConvergeCliLocation,$confirmation -ScriptBlock {param($a1, $a2) Invoke-Expression "& '$a1' -pr fc -n '$a2' ET 400"})
-									InfoMessage $qlogic_hba_ET 
-									$bNeedReboot = $true
+								else{
+									GoodMessage "Skipping Windows Qlogic configuration - All HBA are configured properly as Silk BP"
 								}
 							}
-							else{
-								GoodMessage "Skipping Windows Qlogic configuration - All HBA are configured properly as Silk BP"
-							}
-						}
-					}
-					else {
-						InfoMessage "$MessageCounter - Skipping Windows Qlogic configuration"
-					}
-				}
-				else {
-					# Activation iSCSI Service according to BP - NEW
-					if($ISCSI_Service) {
-						InfoMessage "$MessageCounter - Running activation for iSCSI service"
-						$MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
-						
-						if($MSiSCSI) {
-							if ($MSiSCSI.State -match "Running") {
-								GoodMessage "MSiSCSI service is running"
-
-								# Checking if the service startup type is set to automatic
-								if ($MSiSCSI.StartMode -eq "Auto") {
-									GoodMessage "MSiSCSI service is set to start automatically"	
-								}
-								else {
-									WarningMessage "MSiSCSI service is not set to start automatically but to $($MSiSCSI.StartMode), Setting MSiSCSI service to start automatically"
-									(invoke-Command -Session $pssessions -ScriptBlock {(Set-Service -Name MSiSCSI -StartupType Automatic)}) | Out-Null
-									GoodMessage "Setting MSiSCSI service to start automatically complete"
-								} 
-							}
-							else { 
-								WarningMessage "MSiSCSI service is not running, Current state is - $($MSiSCSI.State), Starting MSiSCSI service and set to start automatically"
-								(invoke-Command -Session $pssessions -ScriptBlock {start-Service MSiSCSI}) | Out-Null
-								(invoke-Command -Session $pssessions -ScriptBlock {(Set-Service -Name MSiSCSI -StartupType Automatic)}) | Out-Null
-								GoodMessage "Starting MSiSCSI service and set to start automatically complete"
-							}
-						}
-						else { 
-							BadMessage "iSCSI service not found, Could not start or enable it"
-						}
-					}
-					else {
-						InfoMessage "$MessageCounter - Skipping Windows iSCSI service configuration"
-					}
-				
-					$MessageCounter++
-					PrintDelimiter
-
-					# Configure ISCSI Network Adapter
-					if($ISCSI_Network_Adapter) {
-						InfoMessage "$MessageCounter - Running activation for iSCSI NIC adapter settings"
-						#iSCSI network adapter settings 
-						$iscsieth = (invoke-Command -Session $pssessions -ScriptBlock {((Get-IscsiTargetPortal).InitiatorPortalAddress | Sort-Object -Unique)})
-						if(!$iscsieth) {
-							WarningMessage "Could not find active iSCSI Network Adapters host initiator"
 						}
 						else {
-							# Create CIM session for chaning the ISCSI network parameters
-							if($bool_local_user) {
-								$CIMsession = New-CimSession
+							InfoMessage "$MessageCounter - Skipping Windows Qlogic configuration"
+						}
+					}
+					else {
+						# Activation iSCSI Service according to BP - NEW
+						if($ISCSI_Service) {
+							InfoMessage "$MessageCounter - Running activation for iSCSI service"
+							# $MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
+							$MSiSCSI = Get-CimInstance Win32_Service -Filter 'Name = "MSiSCSI"' -CimSession $CIMsession
+							
+							if($MSiSCSI) {
+								if ($MSiSCSI.State -match "Running") {
+									GoodMessage "MSiSCSI service is running"
+
+									# Checking if the service startup type is set to automatic
+									if ($MSiSCSI.StartMode -eq "Auto") {
+										GoodMessage "MSiSCSI service is set to start automatically"	
+									}
+									else {
+										WarningMessage "MSiSCSI service is not set to start automatically but to $($MSiSCSI.StartMode), Setting MSiSCSI service to start automatically"
+										(invoke-Command -Session $pssessions -ScriptBlock {(Set-Service -Name MSiSCSI -StartupType Automatic)}) | Out-Null										
+										GoodMessage "Setting MSiSCSI service to start automatically complete"
+									} 
+								}
+								else { 
+									WarningMessage "MSiSCSI service is not running, Current state is - $($MSiSCSI.State), Starting MSiSCSI service and set to start automatically"
+									(invoke-Command -Session $pssessions -ScriptBlock {start-Service MSiSCSI}) | Out-Null
+									(invoke-Command -Session $pssessions -ScriptBlock {(Set-Service -Name MSiSCSI -StartupType Automatic)}) | Out-Null
+									GoodMessage "Starting MSiSCSI service and set to start automatically complete"
+								}
+							}
+							else { 
+								BadMessage "iSCSI service not found, Could not start or enable it"
+							}
+						}
+						else {
+							InfoMessage "$MessageCounter - Skipping Windows iSCSI service configuration"
+						}
+					
+						$MessageCounter++
+						PrintDelimiter
+
+						# Configure ISCSI Network Adapter
+						if($ISCSI_Network_Adapter) {
+							InfoMessage "$MessageCounter - Running activation for iSCSI NIC adapter settings"
+							
+							#iSCSI network adapter settings 							
+							$iscsieth = (Get-IscsiTargetPortal -CimSession $CIMsession).InitiatorPortalAddress | Sort-Object -Unique
+
+							if(!$iscsieth) {
+								WarningMessage "Could not find active iSCSI Network Adapters host initiator"
 							}
 							else {
-								# Initialization pssessions
-								if($Credential -ne [System.Management.Automation.PSCredential]::Empty)	{
-									$CIMsession = New-CimSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate
-								}
-								else {
-									$CIMsession = New-CimSession -ComputerName $WinServer -Authentication Kerberos
-								}
-							}
-							
-							InfoMessage "Setting iSCSI network Adapters"
-							foreach($iscsiadapter in $iscsieth)	{
-								# For each ISCSI netork card get his properies
-								$iscsinetadapter                 = invoke-Command -Session $pssessions -Args $iscsiadapter -ScriptBlock {(Get-NetIPAddress -IPAddress $args[0]).InterfaceAlias}
-								$iscsinetadapteradvancedproperty = invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])}
 								
-								$confirmation = Read-Host "configuring iSCSI network Adapter $iscsinetadapter. Are you Sure You Want To Proceed [Yy/Nn] (Default [Nn],This will restart the network card and will cause several disonnects)"
-								
-								if ($confirmation -match "[yY]") {	
-									# Jambo Property section
-									$iSCSI_jumbo = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Jumbo Packet"})
-									if($iSCSI_jumbo) {
-										if ($iSCSI_jumbo.RegistryValue -match "9014") {
-											GoodMessage "iSCSI network adapter $iscsinetadapter Jumbo Packet is properly configured according to Silk's BP"
-										}
-										else { 
-											InfoMessage "Setting iSCSI network Adapters $iscsinetadapter to work with Jambo Packets"
-											Set-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter -displayname $($iSCSI_jumbo.DisplayName) -RegistryValue "9014" | Out-Null
-											
-											$iscsinetadapteradvancedproperty = (invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])})
-											$iSCSI_jumbo = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Jumbo Packet"})
+								InfoMessage "Setting iSCSI network Adapters"
+								foreach($iscsiadapter in $iscsieth)	{
+									# For each ISCSI netork card get his properies
+									$iscsinetadapter                 = (Get-NetIPAddress -CimSession $CIMsession -IPAddress $iscsiadapter).InterfaceAlias
+									$iscsinetadapteradvancedproperty = get-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter
+									
+									$confirmation = Read-Host "configuring iSCSI network Adapter $iscsinetadapter. Are you Sure You Want To Proceed [Yy/Nn] (Default [Nn],This will restart the network card and will cause several disonnects)"
+									
+									if ($confirmation -match "[yY]") {	
+										# Jambo Property section
+										$iSCSI_jumbo = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Jumbo"})
+										if($iSCSI_jumbo) {
 											if ($iSCSI_jumbo.RegistryValue -match "9014") {
-												GoodMessage "iSCSI network adapter $iscsinetadapter is set to Jumbo Packet"
+												GoodMessage "iSCSI network adapter $iscsinetadapter Jumbo Packet is properly configured according to Silk's BP"
 											}
 											else { 
-												BadMessage "Unable to setting iSCSI network adapter $iscsinetadapter to run Jumbo Packets"
+												InfoMessage "Setting iSCSI network Adapters $iscsinetadapter to work with Jambo Packets"
+												Set-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter -displayname $($iSCSI_jumbo.DisplayName) -RegistryValue "9014" | Out-Null												
+												
+												$iscsinetadapteradvancedproperty = get-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter
+												$iSCSI_jumbo = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Jumbo"})
+												if ($iSCSI_jumbo.RegistryValue -match "9014") {
+													GoodMessage "iSCSI network adapter $iscsinetadapter is set to Jumbo Packet"
+												}
+												else { 
+													BadMessage "Unable to setting iSCSI network adapter $iscsinetadapter to run Jumbo Packets"
+												}
 											}
-										}
-									}
-									else {
-										WarningMessage "iSCSI network adapter $iscsinetadapter doesn't contain Jambo Property"
-									}
-									
-									# Flow Property section
-									$iSCSI_flow = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Flow Control"})
-									if($iSCSI_flow) {
-										if ($iSCSI_flow.DisplayValue -match "Rx & Tx Enabled") {
-											GoodMessage "iSCSI network adapter $iscsinetadapter Flow Control is properly configured according to Silk's BP"
-										}
-										else { 
-											InfoMessage "Enabling Flow Control on iSCSI network Adapters $iscsinetadapter "
-											set-NetAdapterAdvancedProperty -CimSession $CIMsession -name $iscsinetadapter -DisplayName $($iSCSI_flow.DisplayName) -DisplayValue  "Rx & Tx Enabled" | Out-Null
-											
-											$iscsinetadapteradvancedproperty = (invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])})
-											$iSCSI_flow = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Flow Control"})
-											if ($iSCSI_flow.DisplayValue -match "Rx & Tx Enabled") {
-												GoodMessage "Flow Control is enabled iSCSI network adapter $iscsinetadapter"
-											}
-											else { 
-												BadMessage "Couldn't enable Flow Control on iSCSI network adapter $iscsinetadapter"
-											}
-										}	
-									}
-									else {
-										WarningMessage "iSCSI network adapter $iscsinetadapter doesn't contain Flow Property"
-									}
-									
-									# duplex Property section
-									$iSCSI_duplex = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Speed & Duplex"})
-									if($iSCSI_duplex) {
-										if ($iSCSI_duplex.DisplayValue -match "10 Gbps Full Duplex") {
-											GoodMessage "iSCSI network adapter $iscsinetadapter speed and duplex is properly configured according to Silk's BP"
-										}
-										else { 
-											InfoMessage "Setting iSCSI network Adapters $iscsinetadapter to 10 Gbps Full Duplex"
-											set-NetAdapterAdvancedProperty -CimSession $CIMsession -name $iscsinetadapter -DisplayName $($iSCSI_duplex.DisplayName) -DisplayValue  "10 Gbps Full Duplex" | Out-Null
-											
-											$iscsinetadapteradvancedproperty = (invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])})
-											$iSCSI_duplex = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Speed & Duplex"})
-											if ($iSCSI_duplex.DisplayValue -match "10 Gbps Full Duplex") {
-												GoodMessage "iSCSI network adapter $iscsinetadapter speed and duplex is set to 10 Gbps Full Duplex"
-											}
-											else { 
-												BadMessage "Couldn't set iSCSI network adapter $iscsinetadapter speed and duplex to 10 Gbps full Duplex"
-											}
-										}
-									}
-									else {
-										WarningMessage "iSCSI network adapter $iscsinetadapter doesn't contain Duplex Property"
-									}
-									
-									# Disabling RSS on iscsi adapters
-									$iSCSI_side_scaling = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Receive Side Scaling"})
-									if($iSCSI_side_scaling) {
-										if ($iSCSI_side_scaling.DisplayValue -match "Disabled") {
-											GoodMessage "iSCSI network adapter $iscsinetadapter Receive Side Scaling is properly configured according to Silk's BP"
 										}
 										else {
-											InfoMessage "Disabling RSS on iSCSI network Adapters $iscsinetadapter"
-											Disable-NetAdapterRss -CimSession $CIMsession -name $iscsinetadapter -NoRestart |Out-Null
-											
-											$iscsinetadapteradvancedproperty = (invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])})
-											$iSCSI_side_scaling = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Receive Side Scaling"})
+											WarningMessage "iSCSI network adapter $iscsinetadapter doesn't contain Jambo Property"
+										}
+										
+										# Flow Property section
+										$iSCSI_flow = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Flow Control"})
+										if($iSCSI_flow) {
+											if ($iSCSI_flow.DisplayValue -match "Rx & Tx Enabled") {
+												GoodMessage "iSCSI network adapter $iscsinetadapter Flow Control is properly configured according to Silk's BP"
+											}
+											else { 
+												InfoMessage "Enabling Flow Control on iSCSI network Adapters $iscsinetadapter "
+												set-NetAdapterAdvancedProperty -CimSession $CIMsession -name $iscsinetadapter -DisplayName $($iSCSI_flow.DisplayName) -DisplayValue  "Rx & Tx Enabled" | Out-Null
+												
+												$iscsinetadapteradvancedproperty = get-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter
+												$iSCSI_flow = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Flow Control"})
+												if ($iSCSI_flow.DisplayValue -match "Rx & Tx Enabled") {
+													GoodMessage "Flow Control is enabled iSCSI network adapter $iscsinetadapter"
+												}
+												else { 
+													BadMessage "Couldn't enable Flow Control on iSCSI network adapter $iscsinetadapter"
+												}
+											}	
+										}
+										else {
+											WarningMessage "iSCSI network adapter $iscsinetadapter doesn't contain Flow Property"
+										}
+										
+										# duplex Property section
+										$iSCSI_duplex = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Speed & Duplex"})
+										if($iSCSI_duplex) {
+											if ($iSCSI_duplex.DisplayValue -match "10 Gbps Full Duplex") {
+												GoodMessage "iSCSI network adapter $iscsinetadapter speed and duplex is properly configured according to Silk's BP"
+											}
+											else { 
+												InfoMessage "Setting iSCSI network Adapters $iscsinetadapter to 10 Gbps Full Duplex"
+												set-NetAdapterAdvancedProperty -CimSession $CIMsession -name $iscsinetadapter -DisplayName $($iSCSI_duplex.DisplayName) -DisplayValue  "10 Gbps Full Duplex" | Out-Null
+												
+												$iscsinetadapteradvancedproperty = get-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter
+												$iSCSI_duplex = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Speed & Duplex"})
+												if ($iSCSI_duplex.DisplayValue -match "10 Gbps Full Duplex") {
+													GoodMessage "iSCSI network adapter $iscsinetadapter speed and duplex is set to 10 Gbps Full Duplex"
+												}
+												else { 
+													BadMessage "Couldn't set iSCSI network adapter $iscsinetadapter speed and duplex to 10 Gbps full Duplex"
+												}
+											}
+										}
+										else {
+											WarningMessage "iSCSI network adapter $iscsinetadapter doesn't contain Duplex Property"
+										}
+										
+										# Disabling RSS on iscsi adapters
+										$iSCSI_side_scaling = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Receive Side Scaling"})
+										if($iSCSI_side_scaling) {
 											if ($iSCSI_side_scaling.DisplayValue -match "Disabled") {
 												GoodMessage "iSCSI network adapter $iscsinetadapter Receive Side Scaling is properly configured according to Silk's BP"
 											}
-											else { 
-												BadMessage "Couldn't set iSCSI network adapter $iscsinetadapter RSS (side_scaling)to disabled"
+											else {
+												InfoMessage "Disabling RSS on iSCSI network Adapters $iscsinetadapter"
+												Disable-NetAdapterRss -CimSession $CIMsession -name $iscsinetadapter -NoRestart | Out-Null
+												
+												$iscsinetadapteradvancedproperty = get-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter
+												$iSCSI_side_scaling = ($iscsinetadapteradvancedproperty | Where-Object {$_.DisplayName -match "Receive Side Scaling"})
+												if ($iSCSI_side_scaling.DisplayValue -match "Disabled") {
+													GoodMessage "iSCSI network adapter $iscsinetadapter Receive Side Scaling is properly configured according to Silk's BP"
+												}
+												else { 
+													BadMessage "Couldn't set iSCSI network adapter $iscsinetadapter RSS (side_scaling)to disabled"
+												}
 											}
 										}
-									}
-									else {
-										WarningMessage "iSCSI network adapter $iscsinetadapter doesn't contain Side Scaling Property"
-									}
-									
-									# Power Saving Property section
-									$adapter_power_saving = invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {Get-NetAdapter -Name $args[0] | Get-NetAdapterPowerManagement}
-									if($adapter_power_saving) {
-										if ($adapter_power_saving.AllowComputerToTurnOffDevice -match "Disabled") {
-											GoodMessage "iSCSI network adapter $iscsinetadapter Power Saving is properly configured according to Silk's BP"
+										else {
+											WarningMessage "iSCSI network adapter $iscsinetadapter doesn't contain Side Scaling Property"
 										}
-										else { 
-											InfoMessage "Disabling Power Saving for iSCSI network Adapters $iscsinetadapter"
-											$adapter_power_saving.AllowComputerToTurnOffDevice = "Disabled"
-        									
-											invoke-Command -Session $pssessions -Args $adapter_power_saving -ScriptBlock {$args[0] | Set-NetAdapterPowerManagement} | Out-Null
-											
-											$adapter_power_saving = invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {Get-NetAdapter -Name $args[0] | Get-NetAdapterPowerManagement}
+										
+										# Power Saving Property section
+										# $adapter_power_saving = invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {Get-NetAdapter -Name $args[0] | Get-NetAdapterPowerManagement}
+										$adapter_power_saving = (Get-NetAdapterPowerManagement -CimSession $CIMsession -Name $iscsinetadapter)
+										if($adapter_power_saving) {
 											if ($adapter_power_saving.AllowComputerToTurnOffDevice -match "Disabled") {
 												GoodMessage "iSCSI network adapter $iscsinetadapter Power Saving is properly configured according to Silk's BP"
 											}
-											else {
-												BadMessage "Couldn't set iSCSI network adapter $iscsinetadapter Power Saving to disabled"
+											else { 
+												InfoMessage "Disabling Power Saving for iSCSI network Adapters $iscsinetadapter"
+												$adapter_power_saving.AllowComputerToTurnOffDevice = "Disabled"
+												
+												# invoke-Command -Session $pssessions -Args $adapter_power_saving -ScriptBlock {$args[0] | Set-NetAdapterPowerManagement} | Out-Null
+												$adapter_power_saving |  Set-NetAdapterPowerManagement -CimSession $CIMsession | Out-Null
+												
+												$adapter_power_saving = (Get-NetAdapterPowerManagement -CimSession $CIMsession -Name $iscsinetadapter)
+												if ($adapter_power_saving.AllowComputerToTurnOffDevice -match "Disabled") {
+													GoodMessage "iSCSI network adapter $iscsinetadapter Power Saving is properly configured according to Silk's BP"
+												}
+												else {
+													BadMessage "Couldn't set iSCSI network adapter $iscsinetadapter Power Saving to disabled"
+												}
 											}
+										}
+										else {
+											WarningMessage "Could not get the iSCSI network adapter $iscsinetadapter network adapter power management and validate if it contain Power Saving Property"
 										}
 									}
 									else {
-										WarningMessage "Could not get the iSCSI network adapter $iscsinetadapter network adapter power management and validate if it contain Power Saving Property"
+										InfoMessage "The customer choose no, Skipping configuration for iSCSI network Adapter $iscsinetadapter"
 									}
 								}
-								else {
-									InfoMessage "The customer choose no, Skipping configuration for iSCSI network Adapter $iscsinetadapter"
-								}
 							}
-
-							# Remove the CIM session
-							if(![string]::IsNullOrEmpty($CIMsession.Id)) {
-								#Disconwnect from the server
-								Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
-								$CIMsession = $null
-								InfoMessage "Remove the CimSession that assist in configured iSCSI NIC settings"
-							}
-							
+						}
+						else {
+							InfoMessage "$MessageCounter - Skipping configuration for Windows iSCSI network Adapter"
 						}
 					}
-					else {
-						InfoMessage "$MessageCounter - Skipping configuration for Windows iSCSI network Adapter"
-					}
-				}
 
-				$MessageCounter++
-				PrintDelimiter
-				
-				# MPIO Installation - NEW
-				if($MPIO_Installation) {
-					InfoMessage "$MessageCounter - Running activation for Multipath configuration (Windows Feature and Optional Feature)"
-					$MultipathIO = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
+					$MessageCounter++
+					PrintDelimiter
 					
-					# Multipath-IO Feature
-					if($MultipathIO) {
-						if ($MultipathIO.InstallState -eq "Installed") {
-							GoodMessage "Multipath value is Installed properly configured according to Silk's BP"
+					# MPIO Installation - NEW
+					if($MPIO_Installation) {
+						InfoMessage "$MessageCounter - Running activation for Multipath configuration (Windows Feature and Optional Feature)"
+						$MultipathIO = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
+						
+						# Multipath-IO Feature
+						if($MultipathIO) {
+							if ($MultipathIO.InstallState -eq "Installed") {
+								GoodMessage "Multipath value is Installed properly configured according to Silk's BP"
 
-							# Multipath-IO Optional Feature
-							$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
-							if($MultipathIOFeature) {
-								if ($MultipathIOFeature.State -match "Enabled") {
-									GoodMessage "Multipath Windows Optional Feature is properly configured according to Silk's BP"
+								# Multipath-IO Optional Feature
+								$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
+								if($MultipathIOFeature) {
+									if ($MultipathIOFeature.State -match "Enabled") {
+										GoodMessage "Multipath Windows Optional Feature is properly configured according to Silk's BP"
+									}
+									else { 
+										WarningMessage "Multipath Windows Optional Feature is not properly configured according to Silk's BP, The current state is $($MultipathIOFeature.State), Enable Windows Optional Feature starting..."
+										(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
+										GoodMessage "Enable Windows Optional Feature complete, server reboot required!"
+										$bNeedReboot = $true
+									}
 								}
 								else { 
-									WarningMessage "Multipath Windows Optional Feature is not properly configured according to Silk's BP, The current state is $($MultipathIOFeature.State), Enable Windows Optional Feature starting..."
+									WarningMessage "Multipath Optional Feature is not enabled, Enable Windows Optional Feature starting..."
 									(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
 									GoodMessage "Enable Windows Optional Feature complete, server reboot required!"
 									$bNeedReboot = $true
 								}
 							}
 							else { 
-								WarningMessage "Multipath Optional Feature is not enabled, Enable Windows Optional Feature starting..."
+								WarningMessage "Multipath is not installed, The current state is $($MultipathIO.InstallState), Install Windows Feature starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Install-WindowsFeature -name Multipath-IO}) | Out-Null
 								(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
-								GoodMessage "Enable Windows Optional Feature complete, server reboot required!"
+								GoodMessage "Install Windows Feature and Enable Windows Optional Feature complete, server reboot required!"
 								$bNeedReboot = $true
 							}
 						}
 						else { 
-							WarningMessage "Multipath is not installed, The current state is $($MultipathIO.InstallState), Install Windows Feature starting..."
+							WarningMessage "Multipath Feature is not installed, Will install it and the Optional Features"
 							(invoke-Command -Session $pssessions -ScriptBlock {Install-WindowsFeature -name Multipath-IO}) | Out-Null
 							(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
 							GoodMessage "Install Windows Feature and Enable Windows Optional Feature complete, server reboot required!"
 							$bNeedReboot = $true
 						}
 					}
-					else { 
-						WarningMessage "Multipath Feature is not installed, Will install it and the Optional Features"
-						(invoke-Command -Session $pssessions -ScriptBlock {Install-WindowsFeature -name Multipath-IO}) | Out-Null
-						(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
-						GoodMessage "Install Windows Feature and Enable Windows Optional Feature complete, server reboot required!"
-						$bNeedReboot = $true
+					else {
+						InfoMessage "$MessageCounter - Skipping Windows MPIO Installation (Windows Feature and Optional Feature)"
 					}
-				}
-				else {
-					InfoMessage "$MessageCounter - Skipping Windows MPIO Installation (Windows Feature and Optional Feature)"
-				}
 
-				$MessageCounter++
-				PrintDelimiter
-				
-				# MPIO Settings and Confioguration - NEW
-				if($MPIO_Configuration) {
-					InfoMessage "$MessageCounter - Running activation for MPIO Configuration and additional Settings"
-
-					# MPIO sections  Continully only if the Multipath-IO and MultipathIO Feature are installed and enabled
-					$MultipathIO        = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
-					$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
-					if (($MultipathIO.InstallState -match "Installed") -and ($MultipathIOFeature.State -match "Enabled")) {
-						# MPIO Section 
-						$MPIO = $null
-						$MPIO = (Invoke-Command -Session $pssessions -ScriptBlock {Get-MPIOSetting})
-						$MPIO_out = ($MPIO | Out-String).Trim()
-						$MPIO = $MPIO | Out-String -Stream
-						$MPIO = $MPIO.Replace(" ", "")
-						
-						ForEach ($MPIOobject in $MPIO) {
-							switch ($($MPIOobject.Split(':')[0])) {
-								'PathVerificationState'     { $PathVerificationState = $($MPIOobject.Split(':')[1]) } # Enabled
-								'PathVerificationPeriod'    { $PathVerificationPeriod = $($MPIOobject.Split(':')[1]) } # 1 
-								'PDORemovePeriod'           { $PDORemovePeriod = $($MPIOobject.Split(':')[1]) } # FC 20 / ISCSI 80
-								'RetryCount'                { $RetryCount = $($MPIOobject.Split(':')[1]) } # 3
-								'RetryInterval'             { $RetryInterval = $($MPIOobject.Split(':')[1]) } # 3
-								'UseCustomPathRecoveryTime' { $UseCustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) } # Disabled
-								'CustomPathRecoveryTime'    { $CustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) }	# 40
-								'DiskTimeoutValue'          { $DiskTimeOutValue = $($MPIOobject.Split(':')[1]) } # 60
-							}
-						}
-
-						# Print the MPIO Settings
-						InfoMessage "MPIO Settings Section"
-
-						# Print the MPIO into the html
-						handle_string_array_messages $MPIO_out "Data"
+					$MessageCounter++
+					PrintDelimiter
 					
-						# Associating SDP vols with MPIO
-						$MSDSMSupportedHW = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW -VendorId KMNRIO -ProductId K2})
-						if ($MSDSMSupportedHW -match $True) {
-							GoodMessage "MPIO DSM value is properly configured according to Silk's BP"
-						}
-						else {
-							InfoMessage "Associating SDP Vols with MPIO starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {(New-MSDSMSupportedHW -VendorID KMNRIO -ProductID K2)})  | Out-Null
-							GoodMessage "Associating SDP Vols with MPIO completed"
-						}
+					# MPIO Settings and Confioguration - NEW
+					if($MPIO_Configuration) {
+						InfoMessage "$MessageCounter - Running activation for MPIO Configuration and additional Settings"
 
-						if ($PathVerificationState -match "Enabled") {
-							GoodMessage "PathVerificationState value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "PathVerificationState is not Enabled, Current Value is $($PathVerificationState), Configure PathVerificationState parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathVerificationState Enabled }) | Out-Null
-							GoodMessage "Configure PathVerificationState parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
+						# MPIO sections  Continully only if the Multipath-IO and MultipathIO Feature are installed and enabled
+						$MultipathIO        = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
+						$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
+						if (($MultipathIO.InstallState -match "Installed") -and ($MultipathIOFeature.State -match "Enabled")) {
+							# MPIO Section 
+							$MPIO = $null
+							$MPIO = (Invoke-Command -Session $pssessions -ScriptBlock {Get-MPIOSetting})
+							$MPIO_out = ($MPIO | Out-String).Trim()
+							$MPIO = $MPIO | Out-String -Stream
+							$MPIO = $MPIO.Replace(" ", "")
+							
+							ForEach ($MPIOobject in $MPIO) {
+								switch ($($MPIOobject.Split(':')[0])) {
+									'PathVerificationState'     { $PathVerificationState = $($MPIOobject.Split(':')[1]) } # Enabled
+									'PathVerificationPeriod'    { $PathVerificationPeriod = $($MPIOobject.Split(':')[1]) } # 1 
+									'PDORemovePeriod'           { $PDORemovePeriod = $($MPIOobject.Split(':')[1]) } # FC 20 / ISCSI 80
+									'RetryCount'                { $RetryCount = $($MPIOobject.Split(':')[1]) } # 3
+									'RetryInterval'             { $RetryInterval = $($MPIOobject.Split(':')[1]) } # 3
+									'UseCustomPathRecoveryTime' { $UseCustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) } # Disabled
+									'CustomPathRecoveryTime'    { $CustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) }	# 40
+									'DiskTimeoutValue'          { $DiskTimeOutValue = $($MPIOobject.Split(':')[1]) } # 60
+								}
+							}
+
+							# Print the MPIO Settings
+							InfoMessage "MPIO Settings Section"
+
+							# Print the MPIO into the html
+							handle_string_array_messages $MPIO_out "Data"
 						
-						if ($PathVerificationPeriod -match "1")	{
-							GoodMessage "PathVerificationPeriod value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "PathVerificationPeriod value is not set 1, Current Value is $($PathVerificationPeriod), Configure PathVerificationPeriod parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathVerificationPeriod 1 }) | Out-Null
-							GoodMessage "Configure PathVerificationPeriod parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
+							# Checking the MSDSM supported hardware list
+							$MSDSMSupportedHW     = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW})
+							$MSDSMSupportedHW_out = ($MSDSMSupportedHW | Select-Object ProductId, VendorId | Format-Table * -AutoSize | Out-String).Trim()
 
-						if ($RetryCount -match "3")	{
-							GoodMessage "RetryCount value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "RetryCount value is not set 3, Current Value is $($RetryCount), Configure RetryCount parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewRetryCount 3}) | Out-Null
-							GoodMessage "Configure RetryCount parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
+							# Print the MPIO Settings
+							InfoMessage "MSDSM supported hardware list Section :"
 
-						if ($DiskTimeOutValue -match "60") {
-							GoodMessage "DiskTimeOutValue value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "DiskTimeOutValue value is not set 60, Current Value is $($DiskTimeOutValue),Configure DiskTimeOutValue parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {set-MPIOSetting -NewDiskTimeout 60}) | Out-Null
-							GoodMessage "Configure DiskTimeOutValue parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
+							# Print the MPIO into the html
+							handle_string_array_messages $MSDSMSupportedHW_out "Data"
 
-						if ($RetryInterval -match "3") {
-							GoodMessage "RetryInterval value is properly configured according to Silk's BP."
-						}
-						else { 
-							WarningMessage "RetryInterval value is not set 3, Current Value is $($RetryInterval), Configure RetryInterval parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewRetryInterval 3 }) | Out-Null
-							GoodMessage "Configure RetryInterval parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
+							# Checking the KMNRIO supported hardware list - Associating Silk Data Platform Volumes with MPIO DSM
+							$MSDSMSupportedHW_K2 = $MSDSMSupportedHW | where-object {($_.ProductId -eq "K2") -AND ($_.VendorId -eq "KMNRIO")}
+							if ($MSDSMSupportedHW_K2) {
+								GoodMessage "MPIO DSM KMNRIO & K2 DSM value is properly configured according to Silk's BP"
+							}
+							else {
+								InfoMessage "Associating SDP Vols with MPIO starting..."
+								New-MSDSMSupportedHW -CimSession $CIMsession -VendorID KMNRIO -ProductID K2 | Out-Null
+								GoodMessage "Associating SDP Vols with MPIO completed"
+								$bNeedReboot = $true
+							}
 
-						if ($UseCustomPathRecoveryTime -match "Disabled") {
-							GoodMessage "UseCustomPathRecoveryTime value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "UseCustomPathRecoveryTime value is not set Disabled, Current Value is $($UseCustomPathRecoveryTime), Configure UseCustomPathRecoveryTime parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -CustomPathRecovery Disabled}) | Out-Null
-							GoodMessage "Configure UseCustomPathRecoveryTime parameter complete, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						if ($CustomPathRecoveryTime -match "40") {
-							GoodMessage "CustomPathRecoveryTime value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "CustomPathRecoveryTime value is not set 40, Current Value is $($CustomPathRecoveryTime), Configure CustomPathRecoveryTime parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathRecoveryInterval 40}) | Out-Null
-							GoodMessage "Configure CustomPathRecoveryTime parameter complete, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						# Load Balance and Failover Policy
-						$MSDSMGlobalDefaultLoadBalancePolicy = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMGlobalDefaultLoadBalancePolicy})
-						if($MSDSMGlobalDefaultLoadBalancePolicy) {
-							if($MSDSMGlobalDefaultLoadBalancePolicy -match "LQD") {
-								GoodMessage "Microsoft Global load balance policy value is properly configured according to Silk's BP"
+							if ($PathVerificationState -match "Enabled") {
+								GoodMessage "PathVerificationState value is properly configured according to Silk's BP"
 							}
 							else { 
-								WarningMessage "Microsoft Global load balance policy is not set to LQD but set to - $($MSDSMGlobalDefaultLoadBalancePolicy), Configure MSDSMGlobalDefaultLoadBalancePolicy parameter starting..."
-								(invoke-Command -Session $pssessions -ScriptBlock {Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy LQD}) | Out-Null
-								GoodMessage "Configure MSDSMGlobalDefaultLoadBalancePolicy parameter complete"
+								WarningMessage "PathVerificationState is not Enabled, Current Value is $($PathVerificationState), Configure PathVerificationState parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathVerificationState Enabled }) | Out-Null
+								GoodMessage "Configure PathVerificationState parameter completed, server reboot required"
+								$bNeedReboot = $true
 							}
-						}
-						else { 
-							BadMessage "Could not get the state of server global load balance policy " 
-						}
-						
-						# Load Balance and Failover Policy
-						$mpclaimKMNRIO = (((invoke-Command -Session $pssessions -ScriptBlock {(mpclaim -s -t)}) -match "KMNRIO  K2") | Out-String).trim()
-						if($mpclaimKMNRIO)
-						{
-							if(($mpclaimKMNRIO.Substring(11,14)) -match $null)
-							{
-								GoodMessage "Target H/W Identifier value is properly configured according to Silk's BP, mpclaim is - $($mpclaimKMNRIO)"
+							
+							if ($PathVerificationPeriod -match "1")	{
+								GoodMessage "PathVerificationPeriod value is properly configured according to Silk's BP"
 							}
-							else
-							{
-								InfoMessage "Setting Multipath-IO device specific modules (DSM) load balance to 'Least Queue Depth' (LQD) starting..."
-								(invoke-Command -Session $pssessions -ScriptBlock {(mpclaim -l -t "KMNRIO  K2              " 4)}) | Out-Null
-								GoodMessage "Setting Multipath-IO device specific modules (DSM) load balance to 'Least Queue Depth' (LQD) complete"
-							} 
-						}
-						else
-						{
-							InfoMessage "Setting Multipath-IO device specific modules (DSM) load balance to 'Least Queue Depth' (LQD) starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {(mpclaim -l -t "KMNRIO  K2              " 4)}) | Out-Null
-							GoodMessage "Setting Multipath-IO device specific modules (DSM) load balance to 'Least Queue Depth' (LQD) complete"
-						}
-						
-						switch($systemConnectivitytype)	{
-							"fc" {
-								if ($PDORemovePeriod -match "20") {
-									GoodMessage "PDORemovePeriod value is properly configured according to Silk's BP"
+							else { 
+								WarningMessage "PathVerificationPeriod value is not set 1, Current Value is $($PathVerificationPeriod), Configure PathVerificationPeriod parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathVerificationPeriod 1 }) | Out-Null
+								GoodMessage "Configure PathVerificationPeriod parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($RetryCount -match "3")	{
+								GoodMessage "RetryCount value is properly configured according to Silk's BP"
+							}
+							else { 
+								WarningMessage "RetryCount value is not set 3, Current Value is $($RetryCount), Configure RetryCount parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewRetryCount 3}) | Out-Null
+								GoodMessage "Configure RetryCount parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($DiskTimeOutValue -match "60") {
+								GoodMessage "DiskTimeOutValue value is properly configured according to Silk's BP"
+							}
+							else { 
+								WarningMessage "DiskTimeOutValue value is not set 60, Current Value is $($DiskTimeOutValue),Configure DiskTimeOutValue parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {set-MPIOSetting -NewDiskTimeout 60}) | Out-Null
+								GoodMessage "Configure DiskTimeOutValue parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if (($RetryInterval -match "3") -OR ($RetryInterval -match "1")) {
+								GoodMessage "RetryInterval value is properly configured according to Silk's BP."
+							}
+							else { 
+								WarningMessage "RetryInterval value is not set 3, Current Value is $($RetryInterval), Configure RetryInterval parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewRetryInterval 3 }) | Out-Null
+								GoodMessage "Configure RetryInterval parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($UseCustomPathRecoveryTime -match "Disabled") {
+								GoodMessage "UseCustomPathRecoveryTime value is properly configured according to Silk's BP"
+							}
+							else { 
+								WarningMessage "UseCustomPathRecoveryTime value is not set Disabled, Current Value is $($UseCustomPathRecoveryTime), Configure UseCustomPathRecoveryTime parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -CustomPathRecovery Disabled}) | Out-Null
+								GoodMessage "Configure UseCustomPathRecoveryTime parameter complete, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($CustomPathRecoveryTime -match "40") {
+								GoodMessage "CustomPathRecoveryTime value is properly configured according to Silk's BP"
+							}
+							else { 
+								WarningMessage "CustomPathRecoveryTime value is not set 40, Current Value is $($CustomPathRecoveryTime), Configure CustomPathRecoveryTime parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathRecoveryInterval 40}) | Out-Null
+								GoodMessage "Configure CustomPathRecoveryTime parameter complete, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							# Load Balance and Failover Policy
+							$MSDSMGlobalDefaultLoadBalancePolicy = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMGlobalDefaultLoadBalancePolicy})
+							if($MSDSMGlobalDefaultLoadBalancePolicy) {
+								if($MSDSMGlobalDefaultLoadBalancePolicy -match "LQD") {
+									GoodMessage "Microsoft Global load balance policy value is properly configured according to Silk's BP"
 								}
 								else { 
-									WarningMessage "PDORemovePeriod value is not set 20, Current Value is $($PDORemovePeriod), Configure PDORemovePeriod parameter starting..."
-									(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPDORemovePeriod 20}) | Out-Null
-									GoodMessage "Configure PDORemovePeriod parameter complete, server reboot required"
-									$bNeedReboot = $true
+									WarningMessage "Microsoft Global load balance policy is not set to LQD but set to - $($MSDSMGlobalDefaultLoadBalancePolicy), Configure MSDSMGlobalDefaultLoadBalancePolicy parameter starting..."
+									(invoke-Command -Session $pssessions -ScriptBlock {Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy LQD}) | Out-Null
+									GoodMessage "Configure MSDSMGlobalDefaultLoadBalancePolicy parameter complete"
 								}
 							}
-							"iscsi" {
-								if ($PDORemovePeriod -match "80") {
-									GoodMessage "PDORemovePeriod value is properly configured according to Silk's BP"
-								}
-								else { 
-									WarningMessage "PDORemovePeriod value is not set 80, Current Value is $($PDORemovePeriod), Configure PDORemovePeriod parameter starting..."
-									(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPDORemovePeriod 80}) | Out-Null
-									GoodMessage "Configure PDORemovePeriod parameter complete, server reboot required"
-									$bNeedReboot = $true
-								}
+							else { 
+								BadMessage "Could not get the state of server global load balance policy " 
+							}
 								
-								# Checking the MSDSM supported hardware list - Adding iSCSI Support
-								$MSDSMSupportedHW = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW -VendorId MSFT2005 -ProductId iSCSIBusType_0x9})
-								if ($MSDSMSupportedHW) {
-									GoodMessage "MPIO DSM value is properly configured according to Silk's BP"
+							switch($systemConnectivitytype)	{
+								"fc" {
+									if ($PDORemovePeriod -match "20") {
+										GoodMessage "PDORemovePeriod value is properly configured according to Silk's BP"
+									}
+									else { 
+										WarningMessage "PDORemovePeriod value is not set 20, Current Value is $($PDORemovePeriod), Configure PDORemovePeriod parameter starting..."
+										(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPDORemovePeriod 20}) | Out-Null
+										GoodMessage "Configure PDORemovePeriod parameter complete, server reboot required"
+										$bNeedReboot = $true
+									}
 								}
-								else {
-									WarningMessage "MPIO DSM is not set to VendorId:MSFT2005 and ProductId:iSCSIBusType_0x9, Adding MPIO iSCSI support (Claiming all the iSCSI attached storage for the MPIO) starting..."
-									(invoke-Command -Session $pssessions -ScriptBlock {New-MSDSMSupportedHW -VendorId MSFT2005 -ProductId iSCSIBusType_0x9}) | Out-Null
-									GoodMessage "Adding MPIO iSCSI support complete, server reboot required!"
-									$bNeedReboot = $true
-								}
-								
-								# MSDSMAutomaticClaimSettings - Gets settings for MSDSM automatically claiming SAN disks for MPIO. - ISCSI - need to fix
-								$MSDSMAutomaticClaimSettings = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMAutomaticClaimSettings})
-								if($MSDSMAutomaticClaimSettings["iSCSI"]) {
-									GoodMessage "MSDSM automatically claiming SAN disks for MPIO value is properly configured according to Silk's BP"
-								}
-								else { 
-									WarningMessage "MSDSM automatically claiming SAN disks for MPIO value is not properly configured according to Silk's BP, Enable MSDSMAutomaticClaim for iSCSI parameter starting..."
-									(invoke-Command -Session $pssessions -ScriptBlock {Enable-MSDSMAutomaticClaim -BusType iSCSI -Confirm:$false}) | Out-Null
-									GoodMessage "Enable MSDSMAutomaticClaim for iSCSI parameter complete"
-								}
-							}
-						}
-					}
-					else {
-						BadMessage "Because the MPIO is not fully installed and Enabled we can't continue with activate the MPIO Settings and additional configurations"
-					}
-				}
-				else {
-					InfoMessage "$MessageCounter - Skipping Windows MPIO configuration and additional Settings"
-				}
-
-				$MessageCounter++
-				PrintDelimiter
-
-				# Load Balance and Failover Policy for Individual Volumes - NEW
-				if($MPIO_LoadBalancePolicy)	{
-					InfoMessage "$MessageCounter - Running Activiation for Load Balance and Failover Policy for Individual Volumes"
-
-					# Checking if the mpclaim found (if not -> mean that MPIO is not installed)
-					$mpclaim_installed = (invoke-Command -Session $pssessions -ScriptBlock {Get-Command mpclaim.exe})
-
-					if($mpclaim_installed) {
-						# Load Balance and Failover Policy for Individual Volumes
-						$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO K2") -OR ($_.FriendlyName -match "SILK K2") -OR ($_.FriendlyName -match "SILK SDP")} | Sort-Object DeviceID | `
-						Select-object SerialNumber,UniqueId,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}},`
-						@{N="LoadBalancePolicy";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object LoadBalancePolicy).LoadBalancePolicy}})})
-
-						# Check the PD count 
-						if($Server_KMNRIO_PD) {
-							# Write the disk list before changing
-							handle_string_array_messages ($Server_KMNRIO_PD | format-table * | Out-String).trim() "Data"
-
-							foreach ($PD_Temp in $Server_KMNRIO_PD)	{
-								# Check for each Individual if it LQD or not
-								if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth") {
-									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
-								}
-								else {
-									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)"
-									$UniqueID = $PD_Temp.UniqueId.Trim()
-									$MPIODisk = (invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -Namespace root\wmi -Class mpio_disk_info).driveinfo | Select-Object Name,SerialNumber})
-									$MPIODisk = $MPIODisk | Where-Object {$_.SerialNumber -eq $UniqueID}
-									$MPIODiskID = $MPIODisk.Name.Replace("MPIO Disk","")
-									(invoke-Command -Session $pssessions -Args $MPIODiskID -ScriptBlock {mpclaim -l -d $args[0] 4}) | out-null
-									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+								"iscsi" {
+									if ($PDORemovePeriod -match "80") {
+										GoodMessage "PDORemovePeriod value is properly configured according to Silk's BP"
+									}
+									else { 
+										WarningMessage "PDORemovePeriod value is not set 80, Current Value is $($PDORemovePeriod), Configure PDORemovePeriod parameter starting..."
+										(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPDORemovePeriod 80}) | Out-Null
+										GoodMessage "Configure PDORemovePeriod parameter complete, server reboot required"
+										$bNeedReboot = $true
+									}
+									
+									# Checking the MSDSM supported hardware list - Adding iSCSI Support
+									$MSDSMSupportedHW_iSCSI = $MSDSMSupportedHW | where-object {($_.ProductId -eq "iSCSIBusType_0x9") -AND ($_.VendorId -eq "MSFT2005")}									
+									if ($MSDSMSupportedHW_iSCSI) {
+										GoodMessage "MPIO DSM value is properly configured according to Silk's BP"
+									}
+									else {
+										WarningMessage "MPIO DSM is not set to VendorId:MSFT2005 and ProductId:iSCSIBusType_0x9, Adding MPIO iSCSI support (Claiming all the iSCSI attached storage for the MPIO) starting..."										
+										New-MSDSMSupportedHW -CimSession $CIMsession -VendorID MSFT2005 -ProductID iSCSIBusType_0x9 | Out-Null
+										GoodMessage "Adding MPIO iSCSI support complete, server reboot required!"
+										$bNeedReboot = $true
+									}
+									
+									# MSDSMAutomaticClaimSettings - Gets settings for MSDSM automatically claiming SAN disks for MPIO. - ISCSI - need to fix
+									$MSDSMAutomaticClaimSettings = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMAutomaticClaimSettings})
+									if($MSDSMAutomaticClaimSettings["iSCSI"]) {
+										GoodMessage "MSDSM automatically claiming SAN disks for MPIO value is properly configured according to Silk's BP"
+									}
+									else { 
+										WarningMessage "MSDSM automatically claiming SAN disks for MPIO value is not properly configured according to Silk's BP, Enable MSDSMAutomaticClaim for iSCSI parameter starting..."
+										(invoke-Command -Session $pssessions -ScriptBlock {Enable-MSDSMAutomaticClaim -BusType iSCSI -Confirm:$false}) | Out-Null
+										GoodMessage "Enable MSDSMAutomaticClaim for iSCSI parameter complete"
+									}
 								}
 							}
 						}
 						else {
-							InfoMessage "No SILK SDP Disks found on the server"
+							BadMessage "Because the MPIO is not fully installed and Enabled we can't continue with activate the MPIO Settings and additional configurations"
 						}
 					}
 					else {
-						BadMessage "The mpclaim.exe not found. Check if MPIO Installed and Enabled"
+						InfoMessage "$MessageCounter - Skipping Windows MPIO configuration and additional Settings"
 					}
-				}
-				else {
-					InfoMessage "$MessageCounter - Skipping Individual Disk MPIO configuration"
-				}
 
-				$MessageCounter++
-				PrintDelimiter
+					$MessageCounter++
+					PrintDelimiter
 
-				if($CTRL_LU_Offline) {
-					InfoMessage "$MessageCounter - Running Activiation for CTRL Silk Disk"
+					# Init empty server disk.
+					$server_diskInfo = @()
 
-					# Checking if the mpclaim found (if not -> mean that MPIO is not installed)
-					$mpclaim_installed = (invoke-Command -Session $pssessions -ScriptBlock {Get-Command mpclaim.exe})
-					if($mpclaim_installed) {
-						
-						# Load Balance and Failover Policy for Individual Volumes
-						$Server_KMNRIO_PD_CTRL = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO K2") -OR ($_.FriendlyName -match "SILK K2") -OR ($_.FriendlyName -match "SILK SDP")} | `
-						Where-Object {$_.SerialNumber.EndsWith("0000")} | Sort-Object DeviceID | Select-object SerialNumber,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}}, `
-						@{N="DiskStatus";E={($_ | Get-Disk | select-object OperationalStatus).OperationalStatus}})})
+					# Load Balance and Failover Policy for Individual Volumes - NEW
+					if($MPIO_LoadBalancePolicy)	{
+						InfoMessage "$MessageCounter - Running Activiation for Load Balance and Failover Policy for Individual Volumes"
 
-						if($Server_KMNRIO_PD_CTRL) {
+						# Checking if the mpclaim found (if not -> mean that MPIO is not installed)
+						$mpclaim_installed = (invoke-Command -Session $pssessions -ScriptBlock {Get-Command mpclaim.exe})
+
+						if($mpclaim_installed) {
+
+							# Check if the array of disk is empty, if yes, we fill it only once
+							if($server_diskInfo.Count -eq 0) {
+								$server_diskInfo = RemoteServerDiskInfo -pssessions_local $pssessions -cimsession_local $CIMsession
+							}
+
+							# Check the PD count 
+							if($server_diskInfo.Count -ne 0) {
+								
+								# Sort the disk information and print it into html
+								$server_diskInfo      = $server_diskInfo | Sort-Object SerialNumber
+								$Server_KMNRIO_PD_out = ($server_diskInfo | Select-Object DeviceId,DiskNumber,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,SizeGB,DriveLetter,DiskStatus,PartitionStyle | Format-Table * -AutoSize | Out-String).Trim() 
+
+								# Print the MPIO into the html
+								handle_string_array_messages $Server_KMNRIO_PD_out "Data"
+
+								foreach ($PD_Temp in $server_diskInfo)	{
+									# Check for each Individual if it LQD or not
+									if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth") {
+										GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+									}
+									else {
+										WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)"
+										$UniqueID = $PD_Temp.UniqueId.Trim()
+										$MPIODisk = (invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -Namespace root\wmi -Class mpio_disk_info).driveinfo | Select-Object Name,SerialNumber})
+										$MPIODisk = $MPIODisk | Where-Object {$_.SerialNumber -eq $UniqueID}
+										$MPIODiskID = $MPIODisk.Name.Replace("MPIO Disk","")
+										(invoke-Command -Session $pssessions -Args $MPIODiskID -ScriptBlock {mpclaim -l -d $args[0] 4}) | out-null
+										GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+									}
+								}
+							}
+							else {
+								InfoMessage "No SILK SDP Disks found on the server"
+							}
+						}
+						else {
+							BadMessage "The mpclaim.exe not found. Check if MPIO Installed and Enabled"
+						}
+					}
+					else {
+						InfoMessage "$MessageCounter - Skipping Individual Disk MPIO configuration"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					if($CTRL_LU_Offline) {
+						InfoMessage "$MessageCounter - Running Activiation for CTRL Silk Disk"
+
+						# Check if the array of disk is empty, if yes, we fill it only once
+						if($server_diskInfo.Count -eq 0) {
+							$server_diskInfo = RemoteServerDiskInfo -pssessions_local $pssessions -cimsession_local $CIMsession
+						}
+
+						# Checking if the mpclaim found (if not -> mean that MPIO is not installed)						
+						if($server_diskInfo.Count -ne 0) {
 							# Run over the CTRL disks and verify that each disk is Offline
-							foreach ($PD_Temp in $Server_KMNRIO_PD_CTRL) {
+							foreach ($PD_Temp in ($server_diskInfo | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
+								
 								# Check for each Individual if it offline or not
 								if ($PD_Temp.DiskStatus -match "Offline") {
-									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
+									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
 								}
 								else {
-									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
+									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
 									(invoke-Command -Session $pssessions -Args $PD_Temp -ScriptBlock {Get-Disk -SerialNumber $args[0].SerialNumber | Where-Object IsOffline -Eq $False | Set-Disk -IsOffline $True})
-									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
+									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
 								}
 							}
 						}
 						else {
 							InfoMessage "No CTRL SILK SDP Disks found on the server"
-						}
+						}						
 					}
-					else {
-						BadMessage "The mpclaim.exe not found. Check if MPIO Installed and Enabled"
+					else{
+						InfoMessage "$MessageCounter - Skipping CTRL Silk Disk Settings"
 					}
-				}
-				else{
-					InfoMessage "$MessageCounter - Skipping CTRL Silk Disk Settings"
-				}
 
-				$MessageCounter++
-				PrintDelimiter
+					$MessageCounter++
+					PrintDelimiter
 
-				if($WinTrimUnmapRegistry) {
-					# Check that TRIM/UNMAP Registry Key
-					InfoMessage "$MessageCounter - Running activation for Windows TRIM/UNMAP Registry Key..."
-					$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
-					if($WindowsrimUnampRegData) {					
-						if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
-							GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
+					if($WinTrimUnmapRegistry) {
+						# Check that TRIM/UNMAP Registry Key
+						InfoMessage "$MessageCounter - Running activation for Windows TRIM/UNMAP Registry Key..."
+						$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
+						if($WindowsrimUnampRegData) {					
+							if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
+								GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
+							}
+							else {
+								WarningMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification), Disabling DisableDeleteNotification, starting..." 
+								(invoke-Command -Session $pssessions -ScriptBlock {(Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification -Value 1)}) | Out-Null
+								GoodMessage "Windows Trim / UNMAP DisableDeleteNotification Task, complete"
+							}
 						}
 						else {
-							WarningMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification), Disabling DisableDeleteNotification, starting..." 
-							(invoke-Command -Session $pssessions -ScriptBlock {(Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification -Value 1)}) | Out-Null
-							GoodMessage "Windows Trim / UNMAP DisableDeleteNotification Task, complete"
+							InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
+						}
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					# Defragmentation Task - NEW
+					if($Defragmentation) {
+						InfoMessage "$MessageCounter - Running activation for Disk Defrag configuration" 
+						$ScheduledDefragTask = (invoke-Command -Session $pssessions -ScriptBlock {(Get-ScheduledTask ScheduledDefrag).state})
+						if($ScheduledDefragTask) {
+							if($ScheduledDefragTask.value -match "disabled") {
+								GoodMessage " Scheduled Disk Fragmentation policy value is properly configured according to Silk's BP"
+							}
+							else { 
+								WarningMessage "Scheduled Disk Fragmentation is not set to Disabled but to $($ScheduledDefragTask.value), Disabling ScheduledDefrag Task, starting..." 
+								(invoke-Command -Session $pssessions -ScriptBlock {(Get-ScheduledTask ScheduledDefrag -ErrorAction SilentlyContinue | Disable-ScheduledTask)}) | Out-Null
+								GoodMessage "Disabling ScheduledDefrag Task, complete"
+							}
+						}
+						else { 
+							WarningMessage "Scheduled Disk Fragmentation is not found on the windows Scheduled Task, Nothing to do"
 						}
 					}
 					else {
-						InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
+						InfoMessage "$MessageCounter - Skipping Windows disk defragmentation deactivation"
 					}
-				}
 
-				$MessageCounter++
-				PrintDelimiter
-
-				# Defragmentation Task - NEW
-				if($Defragmentation) {
-					InfoMessage "$MessageCounter - Running activation for Disk Defrag configuration" 
-					$ScheduledDefragTask = (invoke-Command -Session $pssessions -ScriptBlock {(Get-ScheduledTask ScheduledDefrag).state})
-					if($ScheduledDefragTask) {
-						if($ScheduledDefragTask.value -match "disabled") {
-							GoodMessage " Scheduled Disk Fragmentation policy value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "Scheduled Disk Fragmentation is not set to Disabled but to $($ScheduledDefragTask.value), Disabling ScheduledDefrag Task, starting..." 
-							(invoke-Command -Session $pssessions -ScriptBlock {(Get-ScheduledTask ScheduledDefrag -ErrorAction SilentlyContinue | Disable-ScheduledTask)}) | Out-Null
-							GoodMessage "Disabling ScheduledDefrag Task, complete"
-						}
+					$MessageCounter++
+					PrintDelimiter
+						
+					# Remove the PS Session
+					if(![string]::IsNullOrEmpty($pssessions.Id)) {
+						#Remove the Session from the server
+						Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
+						$pssessions = $null
+						InfoMessage "Disconnected from $($WinServer) and remove the PSSession"
 					}
-					else { 
-						WarningMessage "Scheduled Disk Fragmentation is not found on the windows Scheduled Task, Nothing to do"
-					}
-				}
-				else {
-					InfoMessage "$MessageCounter - Skipping Windows disk defragmentation deactivation"
-				}
 
-				$MessageCounter++
-				PrintDelimiter
-					
-				# Remove the PSSession
-				if(![string]::IsNullOrEmpty($pssessions.Id)) {
-					#Remove the Session from the server
-					Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
-					$pssessions = $null
-					InfoMessage "Disconnected from $($WinServer) and remove the PSSession"
-				}
-				else {
-					BadMessage "Could not disconnect properly from $($WinServer)"
+					# Remove the CIM session
+					if(![string]::IsNullOrEmpty($CIMsession.Id)) {
+						#Disconwnect from the server
+						Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
+						$CIMsession = $null
+						InfoMessage "Remove the CimSession"
+					}
 				}
 			}
 			
@@ -1715,11 +1745,20 @@ function Windows_Activator {
 
 		PrintDelimiterServer
 
+		# Remove the PS session
 		if(![string]::IsNullOrEmpty($pssessions.Id)) {
 			#Disconwnect from the server
 			Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
 			$pssessions = $null
 			InfoMessage "Disconnected from $($WinServer)"
+		}
+
+		# Remove the CIM session
+		if(![string]::IsNullOrEmpty($CIMsession.Id)) {
+			#Disconwnect from the server
+			Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
+			$CIMsession = $null
+			InfoMessage "Remove the CimSession"
 		}
 	}
 }
@@ -1727,9 +1766,9 @@ function Windows_Activator {
 
 #region Linux Activator
 function Linux_Activator {
+	[cmdletbinding()]
 	Param(
-		[parameter()]
-		[string[]]$ServerArray,
+		[parameter()][string[]]$ServerArray,
 		[System.Management.Automation.PSCredential] 
 		$Credential = [System.Management.Automation.PSCredential]::Empty
 	)
@@ -1964,7 +2003,7 @@ function Linux_Activator {
 			$MessageCurrentObject = $Server
 			
 			if (-not (Test-Connection -ComputerName $Server -Count 2 -Quiet)) {
-				BadMessage "Linux server $($Server) not responding to ping, skipping this server."
+				WarningMessage "Linux server $($Server) not responding to ping, skipping this server."
 			}
 			else {
 				# Write that ping was sucessfully
@@ -2172,35 +2211,7 @@ function Linux_Activator {
 					}
 					
 					InfoMessage "$MessageCounter - Silk Activator - script will activate according to Linux distribution - $($linuxtype)"
-					PrintDelimiter
-					
-					# Print the CPU & Memory
-					$command = "lscpu | grep -E '^CPU|Thread|Socket|Core'"
-					if($bLocalServer) {
-						$CPU_Data = Invoke-Expression $command
-					}
-					else {
-						$CPU_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
-
-					# Print the data
-					InfoMessage "CPU Server Information is:"
-					handle_string_array_messages ($CPU_Data | Out-String).Trim() "Data"
-
-					$command = "cat /proc/meminfo | grep MemTotal"
-					if($bLocalServer) {
-						$Mem_Data = Invoke-Expression $command
-					}
-					else {
-						$Mem_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
-
-					# Print the data
-					InfoMessage "Total Server Memory is:"
-					handle_string_array_messages ($Mem_Data | Out-String).Trim() "Data"
-
-					$MessageCounter++
-					PrintDelimiter
+					PrintDelimiter										
 
 					PrintDescription "Category: High Availability related.`nParameter type: Multipath Services and Packages.`nDescription:Installing Multipath packages and services"
 					$MPIO_Services = UserSelections "MPIO Packages and Services"
@@ -2221,6 +2232,7 @@ function Linux_Activator {
 					}
 					
 					# Starting the main section of Applying the best practices
+					# =========================================================
 					if($MPIO_Services) {
 						# Checking the PREREQUISITES of the packages that must be installed on the machine.
 						InfoMessage "$MessageCounter - Checking / Enabling / Installing Packages and Services"
@@ -2253,7 +2265,8 @@ function Linux_Activator {
 					$MessageCounter++
 					PrintDelimiter 
 
-					##### New Section ####
+					# MPIO file and parameters
+					# ========================
 					if($Multipath_Conf) {
 						# Get multipath.conf file from server
 						InfoMessage "$MessageCounter - Running the Activator for MPIO configuration"
@@ -2402,8 +2415,7 @@ function Linux_Activator {
 						else {
 							BadMessage "multipath.conf file not found on $($multipath_path), we will create it"
 						}
-						
-						# $command_multipath_write = "sudo bash -c 'sudo echo '$($multipathfile_data)' > $($multipath_path)''"
+												
 						$command_multipath_write = "echo '$multipathfile_data' | sudo tee $($multipath_path)"
 						InfoMessage "Setting the multipath.conf according to Silk's Best Practices"
 						if($bLocalServer) {
@@ -2455,7 +2467,8 @@ function Linux_Activator {
 					$MessageCounter++
 					PrintDelimiter
 					
-					##### New Section ####
+					# ioscheduler_Conf file and parameters
+					# ====================================
 					if ($ioscheduler_Conf)
 					{
 						#overwrite the files content
@@ -2569,87 +2582,136 @@ function Linux_Activator {
 					
 					$MessageCounter++
 					PrintDelimiter
-
+					
+					# Network Section
+					# ===============
 					switch($systemConnectivitytype) {
-						"fc" {  
-							if ($Linux_Qlogic) {								
-								
-								#check if qconverge is installed propely and can be exeuted
-								InfoMessage "$MessageCounter - Running Activation for FC QLogic configuration"
-								$lspcicommand = "lspci | grep -i qlogic | grep -i 'Fibre Channel'"
-								if($bLocalServer) {
-									$qlogic = Invoke-Expression $lspcicommand
-								}
-								else{
-									$qlogic = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $lspcicommand
-								}
-								
-								if($qlogic) {
-									$qlogictest = "test -d /opt/QLogic_Corporation/QConvergeConsoleCLI && echo true || echo false"
+						"fc" {
+							if($linux_username -ne "root") {
+								WarningMessage "$MessageCounter - We don't support the qLogic FC validation with user that it not root user (Locally / Remote)"
+							}
+							else {
+								if ($Linux_Qlogic) {									
+									#check if qconverge is installed propely and can be exeuted
+									InfoMessage "$MessageCounter - Running Activation for FC QLogic configuration"
+									$lspcicommand = "lspci | grep -i qlogic | grep -i 'Fibre Channel'"
 									if($bLocalServer) {
-										$qaucliexists = Invoke-Expression $qlogictest
+										$qlogic = Invoke-Expression $lspcicommand
 									}
 									else{
-										$qaucliexists = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qlogictest
+										$qlogic = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $lspcicommand
 									}
 									
-									if (-not($qaucliexists)) {
-										BadMessage "Couldn't found qaucli tool for QLogic for setting configuration"
-									}
-									else {
-										$qlogicHBACommand = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -pr fc -g"
+									if($qlogic) {
+										$qlogictest = "test -d /opt/QLogic_Corporation/QConvergeConsoleCLI && echo true || echo false"
 										if($bLocalServer) {
-											$qlogicHBAData = Invoke-Expression $qlogicHBACommand
+											$qaucliexists = Invoke-Expression $qlogictest
 										}
 										else{
-											$qlogicHBAData = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qlogicHBACommand
+											$qaucliexists = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qlogictest
 										}
-										$qlogicHBAData = $qlogicHBAData | Select-String "HBA Instance" | select-string "Online"| Select-Object -Property @{ Name = 'Row';  Expression = {$_}}, @{ Name = 'HBA_Instance'; Expression = { $_.ToString().split(" ")[-2].Replace(")","")}}
 										
-										$HBA_Online_Array = @()
-										foreach($qauclioutput_hba_item in $qlogicHBAData)
-										{
-											$obj = New-Object -TypeName PSObject
-											$obj | Add-Member -MemberType NoteProperty -Name Row -Value $qauclioutput_hba_item.Row.ToString().Trim()
-											$obj | Add-Member -MemberType NoteProperty -Name HBA_Instance -Value $qauclioutput_hba_item.HBA_Instance
-											
-											$qaucliHBA    = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -pr fc -c $($qauclioutput_hba_item.HBA_Instance)"
-											if($bLocalServer) {
-												$qlogic_hba = Invoke-Expression $qaucliHBA
-											}
-											else {
-												$qlogic_hba = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliHBA
-											}
-
-											$qlogic_hba = qlogic_hba | Select-String "^Operation Mode|^Interrupt Delay Timer|^Execution Throttle"
-											$HBA_Settings_Operation_Mode        = ($HBA_Settings -match "^Operation Mode").line.split(":")[1].trim()
-											$HBA_Settings_Interrupt_Delay_Timer = ($HBA_Settings -match "^Interrupt Delay Timer").line.split(":")[1].trim()
-											$HBA_Settings_Execution_Throttle    = ($HBA_Settings -match "^Execution Throttle").line.split(":")[1].trim()
-											$obj | Add-Member -MemberType NoteProperty -Name Operation_Mode -value $HBA_Settings_Operation_Mode
-											$obj | Add-Member -MemberType NoteProperty -Name Interrupt_Delay_Timer -value $HBA_Settings_Interrupt_Delay_Timer
-											$obj | Add-Member -MemberType NoteProperty -Name Execution_Throttle -value $HBA_Settings_Execution_Throttle
-													
-											$HBA_Online_Array += $obj
+										if (-not($qaucliexists)) {
+											BadMessage "Couldn't found qaucli tool for QLogic for setting configuration"
 										}
+										else {
+											$qlogicHBACommand = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -pr fc -g"
+											if($bLocalServer) {
+												$qlogicHBAData = Invoke-Expression $qlogicHBACommand
+											}
+											else{
+												$qlogicHBAData = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qlogicHBACommand
+											}
+											$qlogicHBAData = $qlogicHBAData | Select-String "HBA Instance" | select-string "Online"| Select-Object -Property @{ Name = 'Row';  Expression = {$_}}, @{ Name = 'HBA_Instance'; Expression = { $_.ToString().split(" ")[-2].Replace(")","")}}
+											
+											$HBA_Online_Array = @()
+											foreach($qauclioutput_hba_item in $qlogicHBAData)
+											{
+												$obj = New-Object -TypeName PSObject
+												$obj | Add-Member -MemberType NoteProperty -Name Row -Value $qauclioutput_hba_item.Row.ToString().Trim()
+												$obj | Add-Member -MemberType NoteProperty -Name HBA_Instance -Value $qauclioutput_hba_item.HBA_Instance
+												
+												$qaucliHBA    = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -pr fc -c $($qauclioutput_hba_item.HBA_Instance)"
+												if($bLocalServer) {
+													$qlogic_hba = Invoke-Expression $qaucliHBA
+												}
+												else {
+													$qlogic_hba = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliHBA
+												}
 
-										# Print to the HTML report all Online reports
-										handle_string_array_messages ($HBA_Online_Array | Format-Table -AutoSize | Out-String).trim() "Data"
+												$qlogic_hba = qlogic_hba | Select-String "^Operation Mode|^Interrupt Delay Timer|^Execution Throttle"
+												$HBA_Settings_Operation_Mode        = ($HBA_Settings -match "^Operation Mode").line.split(":")[1].trim()
+												$HBA_Settings_Interrupt_Delay_Timer = ($HBA_Settings -match "^Interrupt Delay Timer").line.split(":")[1].trim()
+												$HBA_Settings_Execution_Throttle    = ($HBA_Settings -match "^Execution Throttle").line.split(":")[1].trim()
+												$obj | Add-Member -MemberType NoteProperty -Name Operation_Mode -value $HBA_Settings_Operation_Mode
+												$obj | Add-Member -MemberType NoteProperty -Name Interrupt_Delay_Timer -value $HBA_Settings_Interrupt_Delay_Timer
+												$obj | Add-Member -MemberType NoteProperty -Name Execution_Throttle -value $HBA_Settings_Execution_Throttle
+														
+												$HBA_Online_Array += $obj
+											}
 
-										# Show to the customer only HBA that need to be change
-										$HBA_Online_Array_Change = $null
-										$HBA_Online_Array_Change = $HBA_Online_Array | Where-Object {($_.Operation_Mode -ne "6 - Interrupt when Interrupt Delay Timer expires") -or ($_.Interrupt_Delay_Timer -ne 1) -or ($_.Execution_Throttle -ne 400)} 
-																				
-										if($HBA_Online_Array_Change) {
-											$HBA_Online_Array_Change | Format-Table -autosize
-											$confirmation = Read-Host "Select specified HBA instance number or select all instances (999)"
+											# Print to the HTML report all Online reports
+											handle_string_array_messages ($HBA_Online_Array | Format-Table * -AutoSize | Out-String).trim() "Data"
 
-											if($confirmation -eq 999) {
-												InfoMessage "Setting the QLogic parameters according to Silk's best pratices for all avaliable HBA instances"
-												foreach ($HBA_Online_Array_Change_item in $HBA_Online_Array_Change) {
-													$temp_HBA_Instance = $HBA_Online_Array_Change_item.HBA_Instance
-													$qaucliom = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($temp_HBA_Instance) OM 6"
-													$qaucliid = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($temp_HBA_Instance) ID 1"
-													$qaucliet = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($temp_HBA_Instance) ET 400"
+											# Show to the customer only HBA that need to be change
+											$HBA_Online_Array_Change = $null
+											$HBA_Online_Array_Change = $HBA_Online_Array | Where-Object {($_.Operation_Mode -ne "6 - Interrupt when Interrupt Delay Timer expires") -or ($_.Interrupt_Delay_Timer -ne 1) -or ($_.Execution_Throttle -ne 400)} 
+																					
+											if($HBA_Online_Array_Change) {
+												$HBA_Online_Array_Change | Format-Table * -autosize
+												$confirmation = Read-Host "Select specified HBA instance number or select all instances (999)"
+
+												if($confirmation -eq 999) {
+													InfoMessage "Setting the QLogic parameters according to Silk's best pratices for all avaliable HBA instances"
+													foreach ($HBA_Online_Array_Change_item in $HBA_Online_Array_Change) {
+														$temp_HBA_Instance = $HBA_Online_Array_Change_item.HBA_Instance
+														$qaucliom = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($temp_HBA_Instance) OM 6"
+														$qaucliid = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($temp_HBA_Instance) ID 1"
+														$qaucliet = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($temp_HBA_Instance) ET 400"
+														
+														if($bLocalServer) {
+															Invoke-Expression $qaucliom
+															Invoke-Expression $qaucliid
+															Invoke-Expression $qaucliet
+														}
+														else {
+															plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliom
+															plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliid
+															plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliet
+														}
+			
+														GoodMessage "HBA instance - $($temp_HBA_Instance) - Operation Mode set to Interrupt when Interrupt Delay Timer expires or there is no active I/O"
+														GoodMessage "HBA instance - $($temp_HBA_Instance) - Interrupt Delay Timer set to 1"
+														GoodMessage "HBA instance - $($temp_HBA_Instance) - Execution Throttle set to 400"
+													}
+													WarningMessage "Please reboot the server for these changes to take effect!"
+												}
+												else {
+													$qaucliHBA  = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -pr fc -c $($confirmation)"
+													if($bLocalServer) {
+														$qlogic_hba = Invoke-Expression $qaucliHBA
+													}
+													else{
+														$qlogic_hba = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliHBA
+													}
+													
+													while (($qlogic_hba -eq "Unable to locate the specified HBA!") -or ($qlogic_hba -match "Unrecognized")) {
+														WarringMessage "Unable to locate the specified HBA instance!, skipping configuration for QLogic section, try again."
+														$confirmation = Read-Host "Select specified HBA instance number"
+														$qaucliHBA    = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -pr fc -c $($confirmation)"
+														if($bLocalServer) {
+															$qlogic_hba = Invoke-Expression $qaucliHBA
+														}
+														else {
+															$qlogic_hba = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliHBA
+														}
+													}
+		
+													InfoMessage "Setting the QLogic parameters according to Silk's best pratices for HBA instance - $confirmation"
+													
+													$qaucliom = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($confirmation) OM 6"
+													$qaucliid = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($confirmation) ID 1"
+													$qaucliet = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($confirmation) ET 400"
 													
 													if($bLocalServer) {
 														Invoke-Expression $qaucliom
@@ -2662,68 +2724,25 @@ function Linux_Activator {
 														plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliet
 													}
 		
-													GoodMessage "HBA instance - $($temp_HBA_Instance) - Operation Mode set to Interrupt when Interrupt Delay Timer expires or there is no active I/O"
-													GoodMessage "HBA instance - $($temp_HBA_Instance) - Interrupt Delay Timer set to 1"
-													GoodMessage "HBA instance - $($temp_HBA_Instance) - Execution Throttle set to 400"
+													GoodMessage "HBA instance - $($confirmation) - Operation Mode set to Interrupt when Interrupt Delay Timer expires or there is no active I/O"
+													GoodMessage "HBA instance - $($confirmation) - Interrupt Delay Timer set to 1"
+													GoodMessage "HBA instance - $($confirmation) - Execution Throttle set to 400"
+		
+													WarningMessage "Please reboot the server for these changes to take effect!"
 												}
-												WarningMessage "Please reboot the server for these changes to take effect!"
 											}
-											else {
-												$qaucliHBA  = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -pr fc -c $($confirmation)"
-												if($bLocalServer) {
-													$qlogic_hba = Invoke-Expression $qaucliHBA
-												}
-												else{
-													$qlogic_hba = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliHBA
-												}
-												
-												while (($qlogic_hba -eq "Unable to locate the specified HBA!") -or ($qlogic_hba -match "Unrecognized")) {
-													WarringMessage "Unable to locate the specified HBA instance!, skipping configuration for QLogic section, try again."
-													$confirmation = Read-Host "Select specified HBA instance number"
-													$qaucliHBA    = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -pr fc -c $($confirmation)"
-													if($bLocalServer) {
-														$qlogic_hba = Invoke-Expression $qaucliHBA
-													}
-													else {
-														$qlogic_hba = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliHBA
-													}
-												}
-	
-												InfoMessage "Setting the QLogic parameters according to Silk's best pratices for HBA instance - $confirmation"
-												
-												$qaucliom = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($confirmation) OM 6"
-												$qaucliid = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($confirmation) ID 1"
-												$qaucliet = "/opt/QLogic_Corporation/QConvergeConsoleCLI/qaucli -n $($confirmation) ET 400"
-												
-												if($bLocalServer) {
-													Invoke-Expression $qaucliom
-													Invoke-Expression $qaucliid
-													Invoke-Expression $qaucliet
-												}
-												else {
-													plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliom
-													plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliid
-													plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $qaucliet
-												}
-	
-												GoodMessage "HBA instance - $($confirmation) - Operation Mode set to Interrupt when Interrupt Delay Timer expires or there is no active I/O"
-												GoodMessage "HBA instance - $($confirmation) - Interrupt Delay Timer set to 1"
-												GoodMessage "HBA instance - $($confirmation) - Execution Throttle set to 400"
-	
-												WarningMessage "Please reboot the server for these changes to take effect!"
+											else{
+												GoodMessage "Skipping Windows Qlogic configuration - All HBA are configured probably as Silk BP"
 											}
 										}
-										else{
-											GoodMessage "Skipping Windows Qlogic configuration - All HBA are configured probably as Silk BP"
-										}
+									}
+									else {
+										InfoMessage "Skipping FC check since FC HBA is not Qlogic"
 									}
 								}
 								else {
-									InfoMessage "Skipping FC check since FC HBA is not Qlogic"
+									InfoMessage "$MessageCounter - Skipping Linux FC Qlogic Configuration"
 								}
-							}
-							else {
-								InfoMessage "$MessageCounter - Skipping Linux FC Qlogic Configuration"
 							}
 						}
 						
@@ -2851,7 +2870,11 @@ else {
 	# clear the console
 	clear-host
 
+	# Add the Pre-Checking Header
 	$MessageCurrentObject = "Silk Activator pre-Checking"
+
+	# Start time 
+	$bDate = Get-date
 
 	# Print the PowerShell versions and edtion
 	InfoMessage "Silk Activator for Product - $($ActivatorProduct)"
@@ -2957,13 +2980,10 @@ else {
 						Windows_Activator $WindowsServerarray
 					}
 					else {
-						# Choose user for the Activator
-						$WinCredential = read-host ("Windows Credential - using $(whoami) Login user (Y/N), N = or diffrenet user")
-
-						while (($WinCredential -notmatch "[yY]") -and ($WinCredential -notmatch "[nN]")) {
-							write-host -ForegroundColor Red "Invalid entry, please enter 'Y' or 'N' to continue"
-							$WinCredential = read-host ("Windows Credential - using $(whoami) Login user (Y/N), N = or diffrenet user")
-						}
+						# Choose user for the validator
+						do {
+							$WinCredential = Read-Host "Windows Credential - using $(whoami) Login user (Y/N), N = or different user"
+						} while (($WinCredential -NotMatch "[yY]") -and ($WinCredential -NotMatch "[nN]"))
 
 						if($WinCredential -match "[yY]") {
 							Windows_Activator $WindowsServerarray
@@ -2975,6 +2995,16 @@ else {
 					}
 				}
 			}
+
+			# Begin and End Times
+			$eDate = Get-date
+			$tDate = New-TimeSpan -Start $bDate -End $eDate
+
+			# Add end and total time to HTML
+			$SDPBPHTMLBody += "<div id='host_space'>Validator Execution Time</div>"
+			InfoMessage "Time - Validator starting time is - $($bDate)"
+			InfoMessage "Time - Validator ending time is - $($eDate)"
+			InfoMessage "Time - Validator total time (Sec) - $($tDate.TotalSeconds)"
 
 			# Generate HTML Report File
 			InfoMessage "Creating HTML Report..."
