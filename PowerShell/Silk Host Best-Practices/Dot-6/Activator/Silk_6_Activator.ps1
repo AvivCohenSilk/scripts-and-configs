@@ -1,6 +1,6 @@
 <#
     ===========================================================================================================================================
-    Release version: 3.0.0.0
+    Release version: 3.0.0.1
     -------------------------------------------------------------------------------------------------------------------------------------------
     Maintained by:  Aviv.Cohen@Silk.US
     Organization:   Silk.us, Inc.
@@ -30,7 +30,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Validator begin of the script - Activator #####################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "3.0.0.0"
+[string]$SDP_Version = "3.0.0.1"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "Dot6"
@@ -857,8 +857,8 @@ function Windows_Activator {
 			)
 
 		# Get all disks and their associated physical disks by SerialNumber (using with CimSession for local and remote servers)
-		$SilkFriendlyNames = @("KMNRIO K2","SILK K2","SILK SDP")
-		$disks = invoke-Command -Session $pssessions_local -ArgumentList $SilkFriendlyNames -ScriptBlock {param($arr) Get-Disk | Where-Object {
+		[string[]]$SilkFriendlyNames = @("KMNRIO K2","SILK K2","SILK KDP","SILK SDP")
+		$disks = invoke-Command -Session $pssessions_local -ArgumentList (,$SilkFriendlyNames) -ScriptBlock {param($arr) Get-Disk | Where-Object {
 			$diskName = $_.FriendlyName
 			$arr | ForEach-Object {
 				$pattern = [regex]::Escape($_)
@@ -866,8 +866,8 @@ function Windows_Activator {
 					return $true
 				}
 			}
-		} | Select-Object SerialNumber,Number, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle}
-		$physicalDisks     = invoke-Command -Session $pssessions_local -ScriptBlock {Get-PhysicalDisk}
+		} | Select-Object SerialNumber, Number, UniqueId, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle}
+		$physicalDisks = invoke-Command -Session $pssessions_local -ScriptBlock {Get-PhysicalDisk}
 
 		# Create an empty array to store the combined data
 		$server_diskInfo = @()
@@ -895,6 +895,7 @@ function Windows_Activator {
 				DeviceId     = $physicalDisk.DeviceId
 				DiskNumber   = $disknumber
 				SerialNumber = $serialNumber
+				UniqueId      = $disk.UniqueId
 				FriendlyName = $disk.FriendlyName
 				LoadBalancePolicy = $PhysicalDiskStorageNodeView.LoadBalancePolicy
 				CanPool      = $physicalDisk.CanPool
