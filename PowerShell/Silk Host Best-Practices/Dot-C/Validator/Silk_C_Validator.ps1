@@ -1,43 +1,16 @@
 <#
- .SYNOPSIS
- This script gets various arguments and checks the Silk BP against the input.
-
- .DESCRIPTION
- This script gets a Host Type as inputs and validation according to Silk's best practices. 
- This script validates Windows and Linux operation system types.
-
- Versions:
- 09-Dec-2021 - Current version V1.0.0
- 12-Dec-2021 - Current version V1.0.1
- 20-Dec-2021 - Current version V1.0.2
- 01-Jan-2022 - Current version V1.0.3
- 22-Feb-2022 - Current version V1.0.4
- 04-Apr-2022 - Current version V1.0.5
- 11-May-2022 - Current version V1.0.6
- 24-Jul-2022 - Current version V1.0.7
-    
- .NOTES
- Dec 2021
- Script Silk Validator for DotC product created 
-
- Jan 2022
- * (Win) Adjust MPIO DiskTimeoutValue value 45 -> 100
- * (Lin) Adjust multipath.conf to support new vendor and product
- 
- Feb 2022 
- * (Lin) Fix recursive_bracket_parser function to handle "#" marks.
- 
- Apr 2022 
- * (Win) Print the MSDSM output data 
- * (Win) Print the iSCSI Adapter/s output data 
- * (Win) Improve the query of Silk disks in "Load Balance and Failover Policy for Individual Volumes" section
-
- May 2022
- * (Win) Checking and Validate the CTRL LU
-
- Jul 2022
- * (Win/Lin) Added validation regarding TRIM/Unmap in Windows and Linux.
- * (Lin) udev rules for Linux.
+    ===========================================================================================================================================
+    Release version: 2.0.0.0
+    -------------------------------------------------------------------------------------------------------------------------------------------
+    Maintained by:  Aviv.Cohen@Silk.US
+    Organization:   Silk.us, Inc.
+    Filename:       Silk_C_Validator.ps1
+    As Known As:    Silk Dot C Validaotr PowerShell Script
+    Copyright       (c) 2023 Silk.us, Inc.
+    Description:    Verify Initiator with Silk Best Practices for SDP systems.
+	Host Types:     Valid for Windows and Linux environments
+    ------------------------------------------------------------------------------------------------------------------------------------------
+    ===========================================================================================================================================
 #>
 
 # Ensure the minimum version of the PowerShell Validator is 5 and above
@@ -46,7 +19,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "1.0.7"
+[string]$SDP_Version = "2.0.0.0"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "DotC"
@@ -101,14 +74,14 @@ Function InfoMessage {
 
 Function DataMessage {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
-	Write-host "$($MessageCurrentObject) - [Data] - $args"
+	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor
 	$SDPBPHTMLBody += "<div id='DataMessage'>$($MessageCurrentObject) - [Data] - $args</div>"
 }
 
 Function DataMessageBlock {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
-	Write-host "$($MessageCurrentObject) - [Data] - $args"
+	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor	
 	$SDPBPHTMLBody += "<div id='DataMessage'><p id='whitepreclass'>$args</p></div>"
 }
@@ -255,8 +228,8 @@ function TrimHostNames {
 #region handle_string_array_messages
 Function handle_string_array_messages {
 	Param(
-	[string]$StringArray,
-	[string]$MessageType
+		[string]$StringArray,
+		[string]$MessageType
 	)
 
 	switch($MessageType) {
@@ -275,39 +248,39 @@ Function handle_string_array_messages {
 function Windows_Validator {
 	[cmdletbinding()] 
 	Param(	
-		[parameter()]
-		[String[]]$WinServerArray,	
-		[System.Management.Automation.PSCredential]	
-		$Credential = [System.Management.Automation.PSCredential]::Empty
-		)
+		[parameter()][String[]]$WinServerArray,	
+		[System.Management.Automation.PSCredential]$Credential = [System.Management.Automation.PSCredential]::Empty
+	)
 
 	#region Get-SilkSessions
 	function Get-SilkSessions {
 		[cmdletbinding()] 
 		Param(	
-			[parameter()]
-			[CimSession]$CIMsession	
+			[parameter()][CimSession]$CIMsession	
 		)
 	
 		$target = Get-IscsiTarget -CimSession $CIMsession | Where-Object {$_.NodeAddress -match "kaminario" -or $_.NodeAddress -match "silk"}
-		$allConnections = Get-IscsiConnection -CimSession $CIMsession -ErrorAction silentlycontinue 
-		if (!$allConnections -and $target) {
-			Write-Verbose "SCSI query failed - forcing MPIO claim update"
-			Update-MPIOClaimedHW -Confirm:0 | Out-Null # Rescan
-			Start-Sleep -Seconds 4
-			$allConnections = Get-IscsiConnection -CimSession $CIMsession -ErrorAction silentlycontinue 
+		if ([string]::IsNullOrEmpty($target)) {
+			WarningMessage "Get-IscsiTarget with NodeAddress kaminaro/silk is NULL"
+			return $null
 		}
-	
+
+		$allConnections = Get-IscsiTarget -NodeAddress $target.NodeAddress | Get-IscsiConnection -ErrorAction silentlycontinue 
+
+		if (!$allConnections -and $target) {
+			WarningMessage "iSCSI query failed (Function - Get-SilkSessions) - Plaese forcing MPIO claim update"
+			return $null			
+		}	
+
 		if (!$allConnections) {
-			Write-Verbose "No connections listed - terminating query"
+			WarningMessage "No iSCSI connections listed"
 			return $null
 		}
 		
 		$returnArray = @()
 	
 		# Change this query to Get-IscsiTargetPortal to better represent orphaned target portals.
-		# $allTargetIPs = ($allConnections | Select-Object TargetAddress -Unique).TargetAddress
-		$alltargetIPs = (Get-IscsiTargetPortal).TargetPortalAddress
+		$allTargetIPs = ($allConnections | Select-Object TargetAddress -Unique).TargetAddress
 	
 		foreach ($i in $allTargetIPs | sort-object) {
 			$hostIP = ($allConnections | Where-Object {$_.TargetAddress -eq $i} | Select-Object InitiatorAddress -Unique).InitiatorAddress
@@ -379,6 +352,9 @@ function Windows_Validator {
 		foreach ($WinServer in $WinServerArray)	{
 			PrintDelimiter
 
+			# Found error message for summary data
+			$bFoundError = $False
+
 			# Trim the server name
 			$WinServer = $WinServer.Trim()
 			
@@ -387,7 +363,8 @@ function Windows_Validator {
 			
 			# Test coneection to the windows server, if no ping that is meaning that we could not reach it, script finish.
 			if (-not (Test-Connection -ComputerName $WinServer -Count 2 -Quiet)) {
-				BadMessage "The windows Server $($WinServer) not responding to ping (Checking 2 times), skipping this server..."
+				WarningMessage "The windows Server $($WinServer) not responding to ping (Checking 2 times), skipping this server..."
+				$script:NumOfUnreachableHosts +=1
 			}
 			else {
 				# Write that ping was sucessfully
@@ -395,414 +372,528 @@ function Windows_Validator {
 
 				if($bool_local_user) {
 					$pssessions = New-PSSession
-				}
-				else {
-					# Initialization pssessions
-					if($Credential -ne [System.Management.Automation.PSCredential]::Empty) {
-						$pssessions = New-PSSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction Stop
-					}
-					else {
-						$pssessions = New-PSSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction Stop
-					}
-				}
-
-				# Reseting the counter message sections
-				[int]$MessageCounter = 1
-
-				# Write to html the OS version and caption
-				InfoMessage "$MessageCounter - Windows Server Information"
-				$WinOSVersionCaption = (Invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -class Win32_OperatingSystem).Caption})
-				$WinOSVersion        = (Invoke-Command -Session $pssessions -ScriptBlock {[Environment]::OSVersion})
-				DataMessage "Windows OS Caption is - $($WinOSVersionCaption)"
-				DataMessage "Windows OS Version is - $($WinOSVersion.VersionString)"
-
-				# Write the Windows Server Extra data (CPU & Memory)
-				$WinOSCPU    = (Invoke-Command -Session $pssessions -ScriptBlock {(Get-CimInstance Win32_ComputerSystem)})
-				$WinOSMemory = (Invoke-Command -Session $pssessions -ScriptBlock {((Get-CimInstance CIM_PhysicalMemory).Capacity | Measure-Object -Sum).Sum / (1024 * 1024 * 1024)})
-
-				DataMessage "Number Of Processors (Sockets) - $($WinOSCPU.NumberOfProcessors)"
-				DataMessage "Number Of Logical Processors (vCPUs) - $($WinOSCPU.NumberOfLogicalProcessors)"
-				DataMessage "Total Physical Memory (GiB) - $($WinOSMemory)"
-
-				$MessageCounter++
-				PrintDelimiter 
-
-				#validating iSCSI BP
-				InfoMessage "$MessageCounter - Running validation for iSCSI configuration"
-				$MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
-				if($MSiSCSI) {
-					if ($MSiSCSI.State -match "Running") {
-						GoodMessage "MSiSCSI service is running"
-
-						# Checking if the service startup type is set to automatic
-						if ($MSiSCSI.StartMode -eq "Auto") {
-							GoodMessage "MSiSCSI service is set to start automatically"	
-						}
-						else {
-							BadMessage "MSiSCSI service is not set to start automatically but set to $($MSiSCSI.StartMode)"
-						} 
-					}
-					else { 
-						BadMessage "MSiSCSI service is not running, Current state is - $($MSiSCSI.State)"
-					}
-				}
-				else { 
-					BadMessage "iSCSI service not found"
-				}
-
-				$MessageCounter++
-				PrintDelimiter
-
-				# Validating core services and MPIO
-				InfoMessage "$MessageCounter - Running validation for Multipath configuration (Windows Feature and Optional Feature)"
-				$MultipathIO = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
-				
-				# Multipath-IO Feature
-				if($MultipathIO) {
-					if ($MultipathIO.InstallState -eq "Installed") {
-						GoodMessage "Multipath value is Installed properly and configured according to Silk's BP"
-
-						# Multipath-IO Optional Feature
-						$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
-						if($MultipathIOFeature) {
-							if ($MultipathIOFeature.State -match "Enabled")	{
-								GoodMessage "Multipath Windows Optional Feature is properly configured according to Silk's BP"
-							}
-							else { 
-								BadMessage "Multipath Windows Optional Feature is not properly configured according to Silk's BP, The current state is $($MultipathIOFeature.State), Please Enabled it and if needed reboot the server!"
-							}
-						}
-						else { 
-							BadMessage "Multipath Optional Feature is not with Enabled state"
-						}
-					}
-					else { 
-						BadMessage "Multipath is not installed, The current state is $($MultipathIO.InstallState), Please installed it and if needed reboot the server!"
-					}
-				}
-				else { 
-					BadMessage "Multipath Feature is not installed"
-				}
-			
-				# MPIO sections  Continully only if the Multipath-IO and MultipathIO Feature are installed and enabled
-				if (($MultipathIO.InstallState -match "Installed") -and  ($MultipathIOFeature.State -match "Enabled")) {
-					# MPIO Section 
-					$MPIO = $null
-					$MPIO = (Invoke-Command -Session $pssessions -ScriptBlock {Get-MPIOSetting})
-					$MPIO_out = ($MPIO | Out-String).Trim()
-					$MPIO = $MPIO | Out-String -Stream
-					$MPIO = $MPIO.Replace(" ", "")
-					
-					ForEach ($MPIOobject in $MPIO) {
-						switch ($($MPIOobject.Split(':')[0])) {
-							'PathVerificationState'     { $PathVerificationState = $($MPIOobject.Split(':')[1]) } # Enabled
-							'PathVerificationPeriod'    { $PathVerificationPeriod = $($MPIOobject.Split(':')[1]) } # 1 
-							'PDORemovePeriod'           { $PDORemovePeriod = $($MPIOobject.Split(':')[1]) } # 20
-							'RetryCount'                { $RetryCount = $($MPIOobject.Split(':')[1]) } # 3
-							'RetryInterval'             { $RetryInterval = $($MPIOobject.Split(':')[1]) } # 3
-							'UseCustomPathRecoveryTime' { $UseCustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) } # Enabled
-							'CustomPathRecoveryTime'    { $CustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) }	# 20
-							'DiskTimeoutValue'          { $DiskTimeOutValue = $($MPIOobject.Split(':')[1]) } # 100
-						}
-					}
-
-					# Print the MPIO Settings
-					InfoMessage "MPIO Settings Section :"
-
-					# Print the MPIO into the html
-					handle_string_array_messages $MPIO_out "Data"
-
-					# Checking the MSDSM supported hardware list
-					$MSDSMSupportedHW_out = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW})
-					$MSDSMSupportedHW_out = ($MSDSMSupportedHW_out | Select-Object ProductId, VendorId | Format-Table * | Out-String).Trim()
-
-					# Print the MPIO Settings
-					InfoMessage "MSDSM supported hardware list Section :"
-
-					# Print the MPIO into the html
-					handle_string_array_messages $MSDSMSupportedHW_out "Data"
-
-					# Checking the MSDSM supported hardware list
-					$MSDSMSupportedHW = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW -VendorId MSFT2005 -ProductId iSCSIBusType_0x9})
-					if ($MSDSMSupportedHW) {
-						GoodMessage "MPIO DSM value is properly configured according to Silk's BP"
-					}
-					else {
-						BadMessage "MPIO DSM is not set to -VendorId MSFT2005 -ProductId iSCSIBusType_0x9, or could not found it, try to run Get-MSDSMSupportedHW command"
-					}
-
-					if ($PathVerificationState -match "Enabled") {
-						GoodMessage "PathVerificationState value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "PathVerificationState is not Enabled, Current Value is $($PathVerificationState)"
-					}
-					
-					if ($PathVerificationPeriod -match "1")	{
-						GoodMessage "PathVerificationPeriod value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "PathVerificationPeriod value is not set 1, Current Value is $($PathVerificationPeriod)"
-					}
-						
-					if ($RetryCount -match "3")	{
-						GoodMessage "RetryCount value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "RetryCount value is not set 3, Current Value is $($RetryCount)"
-					}
-					
-					if ($DiskTimeOutValue -match "100") {
-						GoodMessage "DiskTimeOutValue value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "DiskTimeOutValue value is not set 100, Current Value is $($DiskTimeOutValue)"
-					}
-					
-					if ($RetryInterval -match "3") {
-						GoodMessage "RetryInterval value is properly configured according to Silk's BP."
-					}
-					else { 
-						BadMessage "RetryInterval value is not set 3, Current Value is $($RetryInterval)"
-					}
-					
-					if ($PDORemovePeriod -match "20") {
-						GoodMessage "PDORemovePeriod value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "PDORemovePeriod value is not set 20, Current Value is $($PDORemovePeriod)"
-					}
-
-					if ($UseCustomPathRecoveryTime -match "Enabled") {
-						GoodMessage "UseCustomPathRecoveryTime value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "UseCustomPathRecoveryTime value is not set Enabled, Current Value is $($UseCustomPathRecoveryTime)"
-					}
-
-					if ($CustomPathRecoveryTime -match "20") {
-						GoodMessage "CustomPathRecoveryTime value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "CustomPathRecoveryTime value is not set 20, Current Value is $($CustomPathRecoveryTime)"
-					}
-
-					# Load Balance and Failover Policy
-					$MSDSMGlobalDefaultLoadBalancePolicy = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMGlobalDefaultLoadBalancePolicy})
-					if($MSDSMGlobalDefaultLoadBalancePolicy) {
-						if($MSDSMGlobalDefaultLoadBalancePolicy -match "LQD") {
-							GoodMessage "Microsoft Global load balance policy value is properly configured according to Silk's BP"
-						}
-						else { 
-							BadMessage "Microsoft Global load balance policy is not set to LQD but set to - $($MSDSMGlobalDefaultLoadBalancePolicy)"
-						}
-					}
-					else { 
-						BadMessage "Could not get the state of server global load balance policy, run Get-MSDSMGlobalDefaultLoadBalancePolicy command for more details." 
-					}
-
-					# MSDSMAutomaticClaimSettings - Gets settings for MSDSM automatically claiming SAN disks for MPIO.
-					$MSDSMAutomaticClaimSettings = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMAutomaticClaimSettings})
-					if($MSDSMAutomaticClaimSettings["iSCSI"]) {
-						GoodMessage "MSDSM automatically claiming SAN disks for MPIO value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "MSDSM automatically claiming SAN disks for MPIO value is not properly configured according to Silk's BP - iSCSI is set to false or not found."
-					}
-				}
-				else {
-					BadMessage "MPIO is not fully installed or Enabled, because of that, we can't continue with validate the MPIO Settings"
-				}
-
-				$MessageCounter++
-				PrintDelimiter
-
-				# Load Balance and Failover Policy for Individual Volumes
-				InfoMessage "$MessageCounter - Running validation for Load Balance and Failover Policy for Individual Volumes"
-				$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO KDP") -OR ($_.FriendlyName -match "KMNRIO SDP") -OR ($_.FriendlyName -match "SILK KDP") -OR ($_.FriendlyName -match "SILK SDP")} | Sort-Object DeviceID | `
-				Select-object DeviceId,SerialNumber,FriendlyName,@{N="LoadBalancePolicy";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object LoadBalancePolicy).LoadBalancePolicy}}, `
-				CanPool,OperationalStatus,HealthStatus,@{Name="Size-Gb"; Expression={$_.Size/1Gb}},@{N="DriveLetter";E={($_ | Get-Disk | Get-Partition | Where-Object {$_.DriveLetter}).DriveLetter}}, `
-				@{N="DiskStatus";E={($_ | Get-Disk | select-object OperationalStatus).OperationalStatus}},@{N="PartitionStyle";E={($_ | Get-Disk | select-object PartitionStyle).PartitionStyle}})})
-
-				# Check the PD count 
-				if($Server_KMNRIO_PD) {
-
-					# Print the MPIO Settings
-					InfoMessage "Silk Disks Settings Section :"
-					$Server_KMNRIO_PD_out = ($Server_KMNRIO_PD | Select-Object DeviceId,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,Size-Gb,DriveLetter,DiskStatus,PartitionStyle | Format-Table * | Out-String).Trim() 
-
-					# Print the MPIO into the html
-					handle_string_array_messages $Server_KMNRIO_PD_out "Data"
-
-					# Run over the disks and verify that each disk is with LQD
-					foreach ($PD_Temp in $Server_KMNRIO_PD)	{
-						# Check for each Individual if it LQD or not
-						if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth") {
-							GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
-						}
-						else {
-							BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)" 
-						}
-					}
-				}
-				else {
-					InfoMessage "No SILK SDP Disks found on the server."
-				}
-
-				$MessageCounter++
-				PrintDelimiter
-				
-				# Check that CTRL volume is OFFLINE
-				InfoMessage "$MessageCounter - Running validation for Silk CTRL LU..."
-				if($Server_KMNRIO_PD) {
-					# Run over the CTRL disks and verify that each disk is with Offline state
-					foreach ($PD_Temp in ($Server_KMNRIO_PD | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
-						# Check for each Individual if it Offline or not
-						if ($PD_Temp.DiskStatus -match "Offline") {
-							GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Disk Status Offline)"
-						}
-						else {
-							BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Disk Status Offline) but set to - $($PD_Temp.DiskStatus)"
-						}
-					}
-					
-				}
-				else {
-					InfoMessage "No SILK SDP Disks found on the server, Could not verify the CTRL LU state"
-				}
-
-				$MessageCounter++
-				PrintDelimiter 
-
-				# Check that TRIM/UNMAP Registry Key
-				InfoMessage "$MessageCounter - Running validation for Windows TRIM/UNMAP Registry Key..."
-				$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
-				if($WindowsrimUnampRegData) {					
-					if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
-						GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
-					}
-					else {
-						BadMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification)"
-					}
-				}
-				else {
-					InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
-				}
-
-				$MessageCounter++
-				PrintDelimiter 
-
-				InfoMessage "$MessageCounter - Running validation for Disk Defrag configuration" 
-				$ScheduledDefragTask = (invoke-Command -Session $pssessions -ScriptBlock {(Get-ScheduledTask ScheduledDefrag).state})
-				if($ScheduledDefragTask) {
-					if($ScheduledDefragTask.value -match "disabled") {
-						GoodMessage " Scheduled Disk Fragmentation policy value is properly configured according to Silk's BP"
-					}
-					else { 
-						BadMessage "Scheduled Disk Fragmentation is not set to Disabled but to $($ScheduledDefragTask.value)" 
-					}
-				}
-				else { 
-					BadMessage "Scheduled Disk Fragmentation is not found on the windows Scheduled Task" 
-				}
-
-				$MessageCounter++
-				PrintDelimiter
-
-				InfoMessage "$MessageCounter - Running validation for Silk iSCSI Sessions" 
-				# Get the silk sessions	
-				if($bool_local_user) {
 					$CIMsession = New-CimSession
 				}
 				else {
 					# Initialization pssessions
-					if($Credential -ne [System.Management.Automation.PSCredential]::Empty)	{
-						$CIMsession = New-CimSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate
+					if($Credential -ne [System.Management.Automation.PSCredential]::Empty) {
+						$pssessions = New-PSSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction SilentlyContinue
+						$CIMsession = New-CimSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction SilentlyContinue
 					}
 					else {
-						$CIMsession = New-CimSession -ComputerName $WinServer -Authentication Kerberos
+						$pssessions = New-PSSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction SilentlyContinue
+						$CIMsession = New-CimSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction SilentlyContinue
 					}
 				}
-
-				# Get the silk iSCSI Sessions
-				$SilkSessions = Get-SilkSessions -CIMsession $CIMsession
-				if($SilkSessions) {
-					handle_string_array_messages ($SilkSessions | Format-Table * | Out-String).Trim() "Data"
+				# Check if we were able to connect via PSSession or CimSession
+				if ([string]::IsNullOrEmpty($pssessions)) {
+					$script:NumOfUnreachableHosts += 1
+					WarningMessage "The windows Server $($WinServer) New-PSSession not able to establish (Check the WinRM in the remote server), skipping this server..."					
+				}
+				elseif ([string]::IsNullOrEmpty($CIMsession)) { 
+					$script:NumOfUnreachableHosts += 1
+					WarningMessage "The windows Server $($WinServer) New-CimSession not able to establish (Check the WinRM in the remote server), skipping this server..."
 				}
 				else {
-					InfoMessage "No Silk iSCSI Sessions found."
-				}
+					# Reseting the counter message sections
+					[int]$MessageCounter = 1
 
-				$MessageCounter++
-				PrintDelimiter
+					# Write to html the OS version and caption
+					InfoMessage "$MessageCounter - Windows Server Information"
+					$Win32OS = Get-CimInstance -CimSession $CIMsession -class Win32_OperatingSystem
+					DataMessage "Windows OS Caption is - $($Win32OS.Caption)"
+					DataMessage "Windows OS Version is - $($Win32OS.Version)"
 
-				InfoMessage "$MessageCounter - Running validation for Network Adapter/s" 
-				# Get the silk iSCSI Sessions
-				$NetAdapters = Get-NetAdapter -CIMsession $CIMsession
-				if($NetAdapters) {
-					handle_string_array_messages ($NetAdapters | Out-String).Trim() "Data"
-				}
-				else {
-					InfoMessage "Could not get the network adapters"
-				}
+					# Write the Windows Server Extra data (CPU & Memory)
+					$WinOSCPU    = Get-CimInstance -CimSession $CIMsession -class Win32_ComputerSystem
+					$WinOSMemory = Get-CimInstance -CimSession $CIMsession -class CIM_PhysicalMemory
+					$WinOSPhysicalMemory = [math]::Round(($WinOSMemory.Capacity | Measure-Object -Sum).Sum /1GB,4)
 
-				$MessageCounter++
-				PrintDelimiter
+					DataMessage "Number Of Processors (Sockets) - $($WinOSCPU.NumberOfProcessors)"
+					DataMessage "Number Of Logical Processors (vCPUs) - $($WinOSCPU.NumberOfLogicalProcessors)"
+					DataMessage "Total Physical Memory (GB) - $($WinOSPhysicalMemory)"
+
+					$MessageCounter++
+					PrintDelimiter 
+
+					#validating iSCSI BP
+					InfoMessage "$MessageCounter - Running validation for iSCSI configuration"
+					# $MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
+					$MSiSCSI = Get-CimInstance -CimSession $CIMsession -Class Win32_Service -Filter "Name='MSiSCSI'"
+					if($MSiSCSI) {
+						if ($MSiSCSI.State -match "Running") {
+							GoodMessage "MSiSCSI service is running"
+
+							# Checking if the service startup type is set to automatic
+							if ($MSiSCSI.StartMode -eq "Auto") {
+								GoodMessage "MSiSCSI service is set to start automatically"	
+							}
+							else {
+								BadMessage "MSiSCSI service is not set to start automatically but set to $($MSiSCSI.StartMode)"
+								$bFoundError = $True
+							} 
+						}
+						else { 
+							BadMessage "MSiSCSI service is not running, Current state is - $($MSiSCSI.State)"
+							$bFoundError = $True
+						}
+					}
+					else { 
+						BadMessage "MSiSCSI service not found"
+						$bFoundError = $True
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					# Validating core services and MPIO
+					InfoMessage "$MessageCounter - Running validation for Multipath configuration (Windows Feature and Optional Feature)"
+					$MultipathIO = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
+					
+					# Multipath-IO Feature
+					if($MultipathIO) {
+						if ($MultipathIO.InstallState -eq "Installed") {
+							GoodMessage "Multipath value is Installed properly and configured according to Silk's BP"
+
+							# Multipath-IO Optional Feature
+							$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
+							if($MultipathIOFeature) {
+								if ($MultipathIOFeature.State -match "Enabled")	{
+									GoodMessage "Multipath Windows Optional Feature is properly configured according to Silk's BP"
+								}
+								else { 
+									BadMessage "Multipath Windows Optional Feature is not properly configured according to Silk's BP, The current state is $($MultipathIOFeature.State), Please Enabled it and if needed reboot the server!"
+									$bFoundError = $True
+								}
+							}
+							else { 
+								BadMessage "Multipath Optional Feature is not with Enabled state"
+								$bFoundError = $True
+							}
+						}
+						else { 
+							BadMessage "Multipath is not installed, The current state is $($MultipathIO.InstallState), Please installed it and if needed reboot the server!"
+						}
+					}
+					else { 
+						BadMessage "Multipath Feature is not installed"
+					}
 				
-				InfoMessage "$MessageCounter - Running validation for iSCSI Network Adapter/s" 
-				# Get the silk iSCSI Sessions
-				if($MSiSCSI) {
-					if (($MSiSCSI.State -match "Running") -And ($MSiSCSI.Status -match "OK"))
-					{
-						$iscsieth = invoke-Command -Session $pssessions -ScriptBlock {(Get-IscsiTargetPortal).InitiatorPortalAddress | Sort-Object -Unique}
-						if(!$iscsieth) {
-							WarningMessage "Could not find active iSCSI Network Adapters"
+					# MPIO sections  Continully only if the Multipath-IO and MultipathIO Feature are installed and enabled
+					if (($MultipathIO.InstallState -match "Installed") -and  ($MultipathIOFeature.State -match "Enabled")) {
+						# MPIO Section 
+						$MPIO = $null
+						$MPIO = (Invoke-Command -Session $pssessions -ScriptBlock {Get-MPIOSetting})
+						$MPIO_out = ($MPIO | Out-String).Trim()
+						$MPIO = $MPIO | Out-String -Stream
+						$MPIO = $MPIO.Replace(" ", "")
+						
+						ForEach ($MPIOobject in $MPIO) {
+							switch ($($MPIOobject.Split(':')[0])) {
+								'PathVerificationState'     { $PathVerificationState = $($MPIOobject.Split(':')[1]) } # Enabled
+								'PathVerificationPeriod'    { $PathVerificationPeriod = $($MPIOobject.Split(':')[1]) } # 1 
+								'PDORemovePeriod'           { $PDORemovePeriod = $($MPIOobject.Split(':')[1]) } # 20
+								'RetryCount'                { $RetryCount = $($MPIOobject.Split(':')[1]) } # 3
+								'RetryInterval'             { $RetryInterval = $($MPIOobject.Split(':')[1]) } # 3
+								'UseCustomPathRecoveryTime' { $UseCustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) } # Enabled
+								'CustomPathRecoveryTime'    { $CustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) }	# 20
+								'DiskTimeoutValue'          { $DiskTimeOutValue = $($MPIOobject.Split(':')[1]) } # 100
+							}
+						}
+
+						# Print the MPIO Settings
+						InfoMessage "MPIO Settings Section :"
+
+						# Print the MPIO into the html
+						handle_string_array_messages $MPIO_out "Data"
+
+						# Checking the MSDSM supported hardware list
+						$MSDSMSupportedHW     = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW})
+						$MSDSMSupportedHW_out = ($MSDSMSupportedHW | Select-Object ProductId, VendorId | Format-Table * -AutoSize | Out-String).Trim()
+
+						# Print the MPIO Settings
+						InfoMessage "MSDSM supported hardware list Section :"
+
+						# Print the MPIO into the html
+						handle_string_array_messages $MSDSMSupportedHW_out "Data"
+
+						# Checking the MSDSM supported hardware list
+						$MSDSMSupportedHW_iSCSI = $MSDSMSupportedHW | where-object {($_.ProductId -eq "iSCSIBusType_0x9") -AND ($_.VendorId -eq "MSFT2005")}
+						if ($MSDSMSupportedHW_iSCSI) {
+							GoodMessage "MPIO DSM value is properly configured according to Silk's BP"
 						}
 						else {
-							# Run over the ISCSI network card
-							foreach($iscsiadapter in $iscsieth)
-							{
-								# For each ISCSI netork card get his properies
-								$iscsinetadapter                 = invoke-Command -Session $pssessions -Args $iscsiadapter -ScriptBlock {(Get-NetIPAddress -IPAddress $args[0]).InterfaceAlias}
-								$iscsinetadapteradvancedproperty = invoke-Command -Session $pssessions -Args $iscsinetadapter -ScriptBlock {(get-netadapteradvancedproperty -name $args[0])}
-								
-								# Write that we are working on iscsinetadapter
-								InfoMessage "Checking full setings for iSCSI Adapter - $($iscsinetadapter)"
+							BadMessage "MPIO DSM is not set to -VendorId MSFT2005 -ProductId iSCSIBusType_0x9, or could not found it, try to run Get-MSDSMSupportedHW command"
+							$bFoundError = $True
+						}
 
-								$iscsinetadapteradvancedproperty_out = ($iscsinetadapteradvancedproperty | Select-object ifAlias,InterfaceAlias,ValueName,ValueData | Format-table * | Out-String).Trim()
-								# Print the MPIO into the html
-								handle_string_array_messages $iscsinetadapteradvancedproperty_out "Data"
+						if ($PathVerificationState -match "Enabled") {
+							GoodMessage "PathVerificationState value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "PathVerificationState is not Enabled, Current Value is $($PathVerificationState)"
+							$bFoundError = $True
+						}
+						
+						if ($PathVerificationPeriod -match "1")	{
+							GoodMessage "PathVerificationPeriod value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "PathVerificationPeriod value is not set 1, Current Value is $($PathVerificationPeriod)"
+							$bFoundError = $True
+						}
+							
+						if ($RetryCount -match "3")	{
+							GoodMessage "RetryCount value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "RetryCount value is not set 3, Current Value is $($RetryCount)"
+							$bFoundError = $True
+						}
+						
+						if ($DiskTimeOutValue -match "100") {
+							GoodMessage "DiskTimeOutValue value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "DiskTimeOutValue value is not set 100, Current Value is $($DiskTimeOutValue)"
+							$bFoundError = $True
+						}
+						
+						if ($RetryInterval -match "3") {
+							GoodMessage "RetryInterval value is properly configured according to Silk's BP."
+						}
+						else { 
+							BadMessage "RetryInterval value is not set 3, Current Value is $($RetryInterval)"
+							$bFoundError = $True
+						}
+						
+						if ($PDORemovePeriod -match "20") {
+							GoodMessage "PDORemovePeriod value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "PDORemovePeriod value is not set 20, Current Value is $($PDORemovePeriod)"
+							$bFoundError = $True
+						}
+
+						if ($UseCustomPathRecoveryTime -match "Enabled") {
+							GoodMessage "UseCustomPathRecoveryTime value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "UseCustomPathRecoveryTime value is not set Enabled, Current Value is $($UseCustomPathRecoveryTime)"
+							$bFoundError = $True
+						}
+
+						if ($CustomPathRecoveryTime -match "20") {
+							GoodMessage "CustomPathRecoveryTime value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "CustomPathRecoveryTime value is not set 20, Current Value is $($CustomPathRecoveryTime)"
+							$bFoundError = $True
+						}
+
+						# Load Balance and Failover Policy
+						$MSDSMGlobalDefaultLoadBalancePolicy = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMGlobalDefaultLoadBalancePolicy})
+						if($MSDSMGlobalDefaultLoadBalancePolicy) {
+							if($MSDSMGlobalDefaultLoadBalancePolicy -match "LQD") {
+								GoodMessage "Microsoft Global load balance policy value is properly configured according to Silk's BP"
+							}
+							else { 
+								BadMessage "Microsoft Global load balance policy is not set to LQD but set to - $($MSDSMGlobalDefaultLoadBalancePolicy)"
+								$bFoundError = $True
+							}
+						}
+						else { 
+							BadMessage "Could not get the state of server global load balance policy, run Get-MSDSMGlobalDefaultLoadBalancePolicy command for more details." 
+							$bFoundError = $True
+						}
+
+						# MSDSMAutomaticClaimSettings - Gets settings for MSDSM automatically claiming SAN disks for MPIO.
+						$MSDSMAutomaticClaimSettings = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMAutomaticClaimSettings})
+						if($MSDSMAutomaticClaimSettings["iSCSI"]) {
+							GoodMessage "MSDSM automatically claiming SAN disks for MPIO value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "MSDSM automatically claiming SAN disks for MPIO value is not properly configured according to Silk's BP - iSCSI is set to false or not found."
+							$bFoundError = $True
+						}
+					}
+					else {
+						BadMessage "MPIO is not fully installed or Enabled, because of that, we can't continue with validate the MPIO Settings"
+						$bFoundError = $True
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					# Load Balance and Failover Policy for Individual Volumes
+					InfoMessage "$MessageCounter - Running validation for Load Balance and Failover Policy for Individual Volumes"
+
+					# Get all disks and their associated physical disks by SerialNumber (using with CimSession for local and remote servers)
+					[string[]]$SilkFriendlyNames = @("KMNRIO K2","SILK K2","SILK KDP","SILK SDP")
+					$disks = invoke-Command -Session $pssessions -ArgumentList (,$SilkFriendlyNames) -ScriptBlock {param($arr) Get-Disk | Where-Object {
+						$diskName = $_.FriendlyName
+						$arr | ForEach-Object {
+							$pattern = [regex]::Escape($_)
+							if ($diskName -match $pattern) {
+								return $true
+							}
+						}
+					} | Select-Object SerialNumber,Number, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle}
+					$physicalDisks = invoke-Command -Session $pssessions -ScriptBlock {Get-PhysicalDisk}
+
+					# Create an empty array to store the combined data
+					$server_diskInfo = @()
+
+					# Loop through each disk and find its associated physical disk by SerialNumber,
+					# Foreach disk we find the PhysicalDiskStorageNodeView and Partition (if exist)
+					foreach ($disk in $disks) {
+						$serialNumber = $disk.SerialNumber
+						$physicalDisk = $physicalDisks | Where-Object { $_.SerialNumber -eq $serialNumber }
+						$PhysicalDiskStorageNodeView = get-PhysicalDiskStorageNodeView -CimSession $CIMsession -PhysicalDisk $physicalDisk
+						$disknumber   = $null
+						$disknumber   = $disk.Number
+						
+						if($disknumber)	{
+							$partitions  = Get-Partition -CimSession $CIMsession -DiskNumber $disknumber -ErrorAction SilentlyContinue
+							$partition   = $partitions | Where-Object {$_.AccessPaths -ne $null}
+							$driveLetter = $null
+							
+							if ($partition) {
+								$driveLetter = $partition.DriveLetter -join ","
+							}
+						}
+						
+						$combinedDisk = [PSCustomObject]@{
+							DeviceId     = $physicalDisk.DeviceId
+							DiskNumber   = $disknumber
+							SerialNumber = $serialNumber
+							FriendlyName = $disk.FriendlyName
+							LoadBalancePolicy = $PhysicalDiskStorageNodeView.LoadBalancePolicy
+							CanPool      = $physicalDisk.CanPool
+							OperationalStatus = $physicalDisk.OperationalStatus
+							HealthStatus = $physicalDisk.HealthStatus
+							SizeGB       = [math]::Round($disk.Size/1GB,4)
+							DriveLetter  = $driveLetter
+							DiskStatus   = $disk.OperationalStatus
+							PartitionStyle = $disk.PartitionStyle
+						}
+						$server_diskInfo += $combinedDisk
+					}
+					
+					# Check the PD count 
+					if($server_diskInfo) {
+
+						# Print the MPIO Settings
+						InfoMessage "Silk Disks Settings Section :"
+						$server_diskInfo = $server_diskInfo | Sort-Object SerialNumber
+						$Server_KMNRIO_PD_out = ($server_diskInfo | Select-Object DeviceId,DiskNumber,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,SizeGB,DriveLetter,DiskStatus,PartitionStyle | Format-Table * -AutoSize | Out-String).Trim() 
+
+						# Print the MPIO into the html
+						handle_string_array_messages $Server_KMNRIO_PD_out "Data"
+
+						# Run over the disks and verify that each disk is with LQD
+						foreach ($PD_Temp in $server_diskInfo)	{
+							# Check for each Individual if it LQD or not
+							if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth")	{
+								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+							}
+							else {
+								BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)" 
+								$bFoundError = $True
 							}
 						}
 					}
 					else {
-						BadMessage "The MSiSCSI service has not been started, could not check iSCSI Network Adapters"
+						InfoMessage "No SILK SDP Disks found on the server."
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+					
+					# Check that CTRL volume is OFFLINE
+					InfoMessage "$MessageCounter - Running validation for Silk CTRL LU..."
+					if($server_diskInfo) {
+						
+						# Run over the CTRL disks and verify that each disk is with Offline state
+						foreach ($PD_Temp in ($server_diskInfo | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
+							
+							# Check for each Individual if it Offline or not
+							if ($PD_Temp.DiskStatus -match "Offline") {
+								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Disk Status Offline)"
+							}
+							else {
+								BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Disk Status Offline) but set to - $($PD_Temp.DiskStatus)"
+								$bFoundError = $True
+							}
+						}
+						
+					}
+					else {
+						InfoMessage "No SILK SDP Disks found on the server, Could not verify the CTRL LU state"
+					}
+
+					$MessageCounter++
+					PrintDelimiter 
+
+					# Check that TRIM/UNMAP Registry Key
+					InfoMessage "$MessageCounter - Running validation for Windows TRIM/UNMAP Registry Key..."
+					$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
+					if($WindowsrimUnampRegData) {					
+						if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
+							GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
+						}
+						else {
+							BadMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification)"
+							$bFoundError = $True
+						}
+					}
+					else {
+						InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
+					}
+
+					$MessageCounter++
+					PrintDelimiter 
+
+					InfoMessage "$MessageCounter - Running validation for Disk Defrag configuration" 
+					$ScheduledDefragTask = (Get-ScheduledTask -CimSession $CIMsession -TaskName ScheduledDefrag)
+					if($ScheduledDefragTask) {
+						if($ScheduledDefragTask.State -match "disabled") {
+							GoodMessage " Scheduled Disk Fragmentation policy value is properly configured according to Silk's BP"
+						}
+						else { 
+							BadMessage "Scheduled Disk Fragmentation is not set to Disabled but to $($ScheduledDefragTask.State)"
+							$bFoundError = $True
+						}
+					}
+					else { 
+						InfoMessage "Scheduled Disk Fragmentation is not found on the windows Scheduled Task" 
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					#### Get the host IQN data!
+					infoMessage "$MessageCounter - Getting the host IQN name" 
+					if($MSiSCSI) {
+						if ($MSiSCSI.State -match "Running") {
+							$InitiatorPortNodeAddress = ((Get-InitiatorPort -CimSession $CIMsession).NodeAddress)
+							if($InitiatorPortNodeAddress) {
+								DataMessage "Host IQN name is $($InitiatorPortNodeAddress) "
+							}else {
+								InfoMessage "The host IQN NodeAddress is NULL and not initialize"
+							}
+
+						}
+						else {							
+							WarningMessage "The MSiSCSI service has not been started, Could not get Host IQN mame"
+						}
+					}
+					else {						
+						WarningMessage "The MSiSCSI service not found, Could not get Host IQN mame"
+					}
+					
+					$MessageCounter++
+					PrintDelimiter					
+					
+					InfoMessage "$MessageCounter - Running validation for Silk iSCSI Sessions" 
+
+					# Get the silk iSCSI Sessions
+					if($MSiSCSI) {
+						if ($MSiSCSI.State -match "Running") {
+							$SilkSessions = Get-SilkSessions -CIMsession $CIMsession
+							if($SilkSessions) {
+								handle_string_array_messages ($SilkSessions | Format-Table * -AutoSize | Out-String).Trim() "Data"
+							} else {
+								InfoMessage "The host don't have iSCSI sessions"
+							}								
+						}
+						else {							
+							WarningMessage "The MSiSCSI service has not been started, Could not get Silk iSCSI Sessions"
+						}
+					}
+					else {						
+						WarningMessage "The MSiSCSI service not found, Could not get Silk iSCSI Sessions"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					InfoMessage "$MessageCounter - Running validation for Network Adapter/s" 
+					# Get the silk iSCSI Sessions
+					$NetAdapters = Get-NetAdapter -CIMsession $CIMsession
+					if($NetAdapters) {
+						handle_string_array_messages ($NetAdapters | Out-String).Trim() "Data"
+					}
+					else {
+						InfoMessage "Could not get the network adapters"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+					
+					InfoMessage "$MessageCounter - Running validation for iSCSI Network Adapter/s" 
+					# Get the silk iSCSI Sessions
+					if($MSiSCSI) {
+						if (($MSiSCSI.State -match "Running") -And ($MSiSCSI.Status -match "OK")) {
+							$iscsieth = (Get-IscsiTargetPortal -CimSession $CIMsession).InitiatorPortalAddress | Sort-Object -Unique
+
+							if(!$iscsieth) {
+								WarningMessage "Could not find active iSCSI Network Adapters"
+							}
+							else {
+								# Run over the ISCSI network card
+								foreach($iscsiadapter in $iscsieth) {
+									
+									# For each ISCSI netork card get his properies
+									$iscsinetadapter                 = (Get-NetIPAddress -CimSession $CIMsession -IPAddress $iscsiadapter).InterfaceAlias
+									$iscsinetadapteradvancedproperty = (get-netadapteradvancedproperty -CimSession $CIMsession -name $iscsinetadapter)
+									
+									# Write that we are working on iscsinetadapter
+									InfoMessage "Checking full setings for iSCSI Adapter - $($iscsinetadapter)"
+
+									$iscsinetadapteradvancedproperty_out = ($iscsinetadapteradvancedproperty | Select-object ifAlias,InterfaceAlias,ValueName,ValueData | Format-table * -AutoSize | Out-String).Trim()
+									# Print the MPIO into the html
+									handle_string_array_messages $iscsinetadapteradvancedproperty_out "Data"
+								}
+							}
+						}
+						else {
+							WarningMessage "The MSiSCSI service has not been started, Could not get iSCSI Network Adapters settings"
+						}
+					}
+					else { 
+						WarningMessage "The MSiSCSI service not found, Could not get iSCSI Network Adapters settings"
+					}
+
+					PrintDelimiter
+					
+					# Remove the CIM session
+					if(![string]::IsNullOrEmpty($CIMsession.Id)) {
+						#Disconwnect from the server
+						Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
+						$CIMsession = $null
+						InfoMessage "Remove the CimSession To $($WinServer)"
+					}
+
+					# Remove the PSSession
+					if(![string]::IsNullOrEmpty($pssessions.Id)) {
+						#Remove the Session from the server
+						Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
+						$pssessions = $null
+						InfoMessage "Remove the PSSession To $($WinServer)"
 					}
 				}
-				else { 
-					BadMessage "iSCSI service not found"
-				}
-
-				PrintDelimiter
-				
-				# Remove the CIM session
-				if(![string]::IsNullOrEmpty($CIMsession.Id)) {
-					#Disconwnect from the server
-					Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
-					$CIMsession = $null
-					InfoMessage "Remove the CimSession"
-				}
-
-				# Remove the PSSession
-				if(![string]::IsNullOrEmpty($pssessions.Id)) {
-					#Remove the Session from the server
-					Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
-					$pssessions = $null
-					InfoMessage "Disconnected from $($WinServer) and remove the PSSession"
-				}
 			}
-			
-			InfoMessage "Validation for $($WinServer) completed."
+
+			# Update the summary 
+			if ($bFoundError) {
+				$script:NumOfFailedHosts += 1
+			}
+			else {
+				$script:NumOfSucessHosts += 1
+			}
+
+			GoodMessage "Validation for $($WinServer) completed!"
 
 			PrintDelimiter
 			$SDPBPHTMLBody += "<div id='host_space'></div>"
@@ -822,11 +913,19 @@ function Windows_Validator {
 
 		PrintDelimiterServer
 
+		# Remove the CIM session
+		if(![string]::IsNullOrEmpty($CIMsession.Id)) {
+			#Disconwnect from the server
+			Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
+			$CIMsession = $null
+			InfoMessage "Remove the CimSession To $($WinServer)"
+		}
+
 		if(![string]::IsNullOrEmpty($pssessions.Id)) {
 			#Disconwnect from the server
 			Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
 			$pssessions = $null
-			InfoMessage "Disconnected from $($WinServer)"
+			InfoMessage "Remove the PSSession To $($WinServer)"
 		}
 	}
 }
@@ -836,14 +935,12 @@ function Windows_Validator {
 function Linux_Validator {	
 	[cmdletbinding()] 
 	Param(
-		[parameter()]
-		[string[]]$ServerArray,
-		[System.Management.Automation.PSCredential] 
-		$Credential = [System.Management.Automation.PSCredential]::Empty
+		[parameter()][string[]]$ServerArray,
+		[System.Management.Automation.PSCredential]$Credential = [System.Management.Automation.PSCredential]::Empty
 	)
 
-	#region InternalSubFunctions
 	# Internal Sub Functions
+	#region InternalSubFunctions	
 	Function ValidatePlinkExecutable {
 		InfoMessage "Validate Plink Executable."
 		$Plink_Installed = $false
@@ -854,8 +951,8 @@ function Linux_Validator {
 
 			if ($Plink_command) {
 				$Plink_min_version =  0.74
-				$Plink_Source  = $Plink_command.Source
-				$Plink_release = (&$plink_source -V | select-string "plink: Release").ToString().replace("plink: Release ","").trim()
+				$Plink_Source      = $Plink_command.Source
+				$Plink_release     = (&$plink_source -V | select-string "plink: Release").ToString().replace("plink: Release ","").trim()
 				
 				# Check if the version is only numbers
 				if($Plink_release -match "^[\d\.]+$") {
@@ -888,13 +985,16 @@ function Linux_Validator {
 	#region ValidateAttrinuteInIoschedulers
 	Function ValidateAttrinuteInMpio {
 		Param(
-		[string]$Mpio_Section_Name,
-		[string[]]$Mpio_Section_Data,
-		[string]$Parameter_name,
-		[string[]]$Parameter_value_array
+			[parameter()][string]$Mpio_Section_Name,
+			[parameter()][string[]]$Mpio_Section_Data,
+			[parameter()][string]$Parameter_name,
+			[parameter()][string[]]$Parameter_value_array
 		)
 
 		[System.Boolean]$bFound = $false
+
+		# Return if found error
+		[System.Boolean]$bfoundErrorInFunction = $False
 
 		$Mpio_Checking_Value = ($Mpio_Section_Data) -match ($Parameter_name)
 		if ($Mpio_Checking_Value) {
@@ -908,23 +1008,31 @@ function Linux_Validator {
 
 			if(!$bFound) {
 				BadMessage "Section $($Mpio_Section_Name) - Parameter $($Parameter_name) value with $($Parameter_value_array[1]) value is missing or configured wrongly, Please check the Silk BP."
+				$bfoundErrorInFunction = $True
 			}
 		}
 		else { 
 			BadMessage "Section $($Mpio_Section_Name) - Parameter $($Parameter_name) is missing in the multipath.conf file"
+			$bfoundErrorInFunction = $True
 		}
+
+		# Return $bfoundErrorInFunction value
+		return $bfoundErrorInFunction
 	}
 	#endregion
 
 	#region ValidateAttrinuteInIoschedulers
 	Function ValidateAttrinuteInIoschedulers {
 		Param(
-		[string[]]$ioschedulers_Section,
-		[string]$Parameter_name,
-		[string[]]$Parameter_value_array
+			[parameter()][string[]]$ioschedulers_Section,
+			[parameter()][string]$Parameter_name,
+			[parameter()][string[]]$Parameter_value_array
 		)
 
 		[System.Boolean]$bFound = $false
+
+		# Return if found error
+		[System.Boolean]$bfoundErrorInFunction = $False
 
 		$Parameter_Display_name = $Parameter_name.Replace("}.*","-")
 		$ioschedulers_Checking_Value = ($ioschedulers_Section) -match ($Parameter_name)
@@ -939,18 +1047,23 @@ function Linux_Validator {
 
 			if(!$bFound) {
 				BadMessage "$($Parameter_name) value with $($Parameter_value_array[1]) value is missing or configured wrongly, Please check the Silk BP."
+				$bfoundErrorInFunction = $False
 			}
 		}
 		else { 
 			BadMessage "ioschedulers.conf is missing $($Parameter_Display_name) parameter"
+			$bfoundErrorInFunction = $False
 		}
+
+		# Return $bfoundErrorInFunction value
+		return $bfoundErrorInFunction
 	}
 	#endregion
 
 	#region recursive_bracket_parser
 	Function recursive_bracket_parser {
 		Param(
-		$s,$i,$level
+			$s,$i,$level
 		)
 
 		while ($i -lt $s.length) {
@@ -982,83 +1095,150 @@ function Linux_Validator {
 	#region Checking_Package
 	Function Checking_Package {
 		Param(		
-		[string]$Pacakge,
-		[string]$LinuxOSType
+			[parameter()][string]$Pacakge,
+			[parameter()][string]$LinuxOSType
 		)
+
+		# Return if found error
+		[System.Boolean]$bfoundErrorInFunction = $False
 
 		# Checking the PREREQUISITES of the packages that must be installed on the machine (device-mapper-multipath* / lsscsi  / scsi-initiator-utils*)
 		switch -Wildcard ($LinuxOSType)	{
 			'rhel*' {
 				$command = "sudo rpm -qa | grep $($Pacakge)"
-				if($bLocalServer) {
-					$rpmCheck = Invoke-Expression $command
-				}
-				else {
-					$rpmCheck = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-				}
-				if ($rpmCheck) {
-					GoodMessage "package $($Pacakge) Installed - version:"
-					handle_string_array_messages ($rpmCheck | Out-String).trim() "Data"
-				}
-				else {
-					BadMessage "package $($Pacakge) not Installed"
-				}
 			}
-
 			'debian*' {
 				$command = "sudo dpkg -s | grep $($Pacakge)"
-				if($bLocalServer) {
-					$rpmCheck = Invoke-Expression $command
-				}
-				else {
-					$rpmCheck = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-				}
-				if ($rpmCheck) {
-					GoodMessage "package $($Pacakge) Installed - version:"
-					handle_string_array_messages ($rpmCheck | Out-String).trim() "Data"
-				}
-				else {
-					BadMessage "package $($Pacakge) not Installed"
-				}
 			}
 		}
+
+		# Execute the command 
+		$rpmCheck = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+
+		if ($rpmCheck) {
+			GoodMessage "package $($Pacakge) Installed - version:"
+			handle_string_array_messages ($rpmCheck | Out-String).trim() "Data"
+		}
+		else {
+			BadMessage "package $($Pacakge) not Installed"
+			$bfoundErrorInFunction = $True
+		}
+
+		# Return $bfoundErrorInFunction value
+		return $bfoundErrorInFunction
 	}
 	#endregion
 
 	#region Checking_Service
 	Function Checking_Service {
 		Param(
-		[string]$Service,
-		[string]$LinuxOSType
+			[parameter()][string]$Service,
+			[parameter()][string]$LinuxOSType
 		)
+
+		# Return if found error
+		[System.Boolean]$bfoundErrorInFunction = $False
 
 		# Checking the MPIO and iSCSI Services on the machine
 		[string]$ServiceActive  = "active"
 		[string]$ServiceEnabled = "enabled"
 
 		$command = "sudo systemctl is-active $($Service); sudo systemctl is-enabled $($Service)"
-		if($bLocalServer) {
-			$CheckingServiceStatus = Invoke-Expression $command
-		}
-		else {
-			$CheckingServiceStatus = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-		}
+		$CheckingServiceStatus = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 		
 		# Check if it null
 		if($CheckingServiceStatus) {
-			$CheckingServiceStatus = $CheckingServiceStatus -join " "
-			if(($CheckingServiceStatus -match $ServiceActive) -AND ($CheckingServiceStatus -match $ServiceEnabled))	{
+			$CheckingServiceStatus_output = $CheckingServiceStatus -join " "
+			if(($CheckingServiceStatus[0] -eq $ServiceActive) -AND ($CheckingServiceStatus[1] -eq $ServiceEnabled))	{
 				GoodMessage "$($Service) serivce is running and enabled..."
 			}
 			else {
-				BadMessage "$($Service) service is not running or enabled, current state is - $($CheckingServiceStatus)"
+				BadMessage "$($Service) service is not running or enabled, current state is - $($CheckingServiceStatus_output)"
+				$bfoundErrorInFunction = $True
 			}
 		}
 		else {
 			BadMessage "$($Service) serivce not found, Please installed it."
+			$bfoundErrorInFunction = $True
 		}
+
+		# Return $bfoundErrorInFunction value
+		return $bfoundErrorInFunction
 	}
 	#endregion
+
+	#region Checking_File_Content
+	Function Checking_File_Content {
+		Param(
+			[string]$FilePath,
+			[string]$FileConParameter,
+			[string]$FileConSeparator,
+			[string]$FileConValue
+		)
+		
+		# Boolean helper
+		$bFileFound = $false
+
+		# Return if found error
+		[System.Boolean]$bfoundErrorInFunction = $False
+
+		# Note: make sure iscsi is set for automatic login:
+		# in /etc/iscsi/iscsid.conf , key “node.startup = automatic”
+		 $command = "test -f $FilePath && echo true || echo false"
+		 $FileFound = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+
+		if(!$FileFound) {
+			BadMessage "File - $($FilePath) not found!"
+			$bfoundErrorInFunction = $True
+		} else {
+			$command      = "sudo cat $FilePath"
+			$FileContent  = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+			$FileConFound = ($FileContent | Select-String -Pattern $("^$FileConParameter")).Line.Trim()
+			$bFileFound   = $True
+		}
+
+		if($bFileFound) {
+			if(-not ($FileConFound)) {
+				BadMessage "File - $($FilePath) Don't contain $($FileConParameter)!"
+				$bfoundErrorInFunction = $True
+			} else {
+				$FileConFoundValue = $FileConFound.Split($FileConSeparator)[1].Trim()
+				if(-not ($FileConFoundValue -eq $FileConValue)) {
+					BadMessage "File - $($FilePath) contain - $($FileConParameter), Yet value is not $($FileConValue) but a $($FileConFoundValue), Please adjust it as Silk BP"
+					$bfoundErrorInFunction = $True
+				} else {
+					GoodMessage "File - $($FilePath) contain - $($FileConParameter), With value of a $($FileConValue)"
+				}
+			}
+		}
+		
+		# Return the found error
+		return $bfoundErrorInFunction
+	}
+	#endregion
+
+	#region Invoke-LinuxCommand
+	function Invoke-LinuxCommand {
+		param (
+			[Parameter()][string]$Command,
+			[Parameter()][string]$Server,
+			[Parameter()][string]$LinuxUserName,
+			[Parameter()][string]$LinuxUserPassword,
+			[Parameter(Mandatory=$true)][bool]$UseLocalServer
+		)
+
+		if ($UseLocalServer) {
+			$rtrValue = Invoke-Expression $Command
+		} else {
+			$rtrValue = Invoke-Expression 'plink -P 22 -ssh $Server -pw $LinuxUserPassword -l $LinuxUserName -no-antispoof $Command'
+		}
+
+		# Return the output of the command
+		return $rtrValue
+	}
+	#endregion
+
+	# End Internal Sub Functions
 
 	# Local Variable - Main Validator function
 	[boolean]$bLocalServer = $false
@@ -1077,6 +1257,9 @@ function Linux_Validator {
 
 		# Set local server name - $ServerArray
 		$ServerArray = hostname
+
+		# Init the user and password to empty string
+		$linux_userpassword = $linux_username = ""
 	}
 	else {
 		# Get the user and password of the exeute user
@@ -1102,6 +1285,10 @@ function Linux_Validator {
 
 		# Run over the Server array list
 		foreach ($Server in $ServerArray) {
+			
+			# Found error message for summary data
+			$bFoundError = $False
+
 			# Trim the server
 			$Server = $Server.trim()
 			
@@ -1109,11 +1296,12 @@ function Linux_Validator {
 			$MessageCurrentObject = $Server
 			
 			if (-not (Test-Connection -ComputerName $Server -Count 2 -Quiet)) {
-				BadMessage "Linux server $($Server) not responding to ping, skipping this server."
+				WarningMessage "Linux server $($Server) not responding to ping, skipping this server."
+				$script:NumOfUnreachableHosts +=1
 			}
 			else {
 				# Write that ping was sucessfully
-				GoodMessage "Pinging  $($Server) was successfully"
+				GoodMessage "Pinging $($Server) was successfully"
 
 				# Reseting the counter message sections
 				[int]$MessageCounter = 1
@@ -1128,7 +1316,8 @@ function Linux_Validator {
 				}
 
 				if($plink_results -ne "connected") {
-					BadMessage "Could't connect to Linux server $($Server), please check user and password."
+					WarningMessage "Could't connect to Linux server $($Server), please check user and password."
+					$script:NumOfUnreachableHosts +=1
 				}
 				else {
 					# Write that connection is made
@@ -1138,33 +1327,19 @@ function Linux_Validator {
 					$bLinuxDistroFound = $true
 					$command           = "command -v lsb_release"
 					
-					if($bLocalServer) {
-						$checking_lsb_comm = Invoke-Expression $command
-					}
-					else {
-						$checking_lsb_comm = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					# Invoke the command 
+					$checking_lsb_comm = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 					if($checking_lsb_comm) {
 						# Checking the data
 						$command  = "lsb_release -a | grep -E 'Release:|Distributor ID:'"
 						$Splinter = ":"
-						if($bLocalServer) {
-							$Linux_Distro_info = Invoke-Expression $command | Sort-Object
-						}
-						else {
-							$Linux_Distro_info = (plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command) | Sort-Object
-						}
+						$Linux_Distro_info = (Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer) | Sort-Object
 					}
 					else {
 						$command  = "cat /etc/os-release | grep -E '\bID=|\bVERSION_ID='"
 						$Splinter = "="
-						if($bLocalServer) {
-							$Linux_Distro_info = Invoke-Expression $command | Sort-Object
-						}
-						else {
-							$Linux_Distro_info = (plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command) | Sort-Object
-						}
+						$Linux_Distro_info = (Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer) | Sort-Object
 
 						if(-not($Linux_Distro_info)) {
 							$bLinuxDistroFound = $false
@@ -1310,54 +1485,34 @@ function Linux_Validator {
 
 					InfoMessage "Silk Validator script will validate according to Linux distribution - $($linuxtype)"
 
-					PrintDelimiter					
+					PrintDelimiter
 
 					# Print the CPU & Memory and Kernel Version
 					InfoMessage "$MessageCounter - Print Server Kernel version / CPU / Memory / Network"
 					$command = "sudo uname -r"
-					if($bLocalServer) {
-						$Kernel_Data = Invoke-Expression $command
-					}
-					else {
-						$Kernel_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					$Kernel_Data = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 					# Print the data
-					DataMessage "kernel version is: $($Kernel_Data)"			 
+					DataMessage "kernel version is: $($Kernel_Data)"
 
 					# Print the CPU & Memory and Kernel Version
 					$command = "lscpu | grep -E '^CPU|Thread|Socket|Core'"
-					if($bLocalServer) {
-						$CPU_Data = Invoke-Expression $command
-					}
-					else {
-						$CPU_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					$CPU_Data = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 					# Print the data
 					InfoMessage "CPU Server Information is:"
 					handle_string_array_messages ($CPU_Data | Out-String).Trim() "Data"
 
 					$command = "cat /proc/meminfo | grep MemTotal"
-					if($bLocalServer) {
-						$Mem_Data = Invoke-Expression $command
-					}
-					else {
-						$Mem_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
-
+					$Mem_Data = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+					
 					# Print the data
 					InfoMessage "Total Server Memory is:"
 					handle_string_array_messages ($Mem_Data | Out-String).Trim() "Data"
 
 					$command = "sudo lshw -class network"
-					if($bLocalServer) {
-						$Network_Data = Invoke-Expression $command
-					}
-					else {
-						$Network_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
-
+					$Network_Data = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+					
 					# Checking about the lshw tool 
 					if($Network_Data) {
 						# Print the data
@@ -1376,14 +1531,14 @@ function Linux_Validator {
 
 					switch -Wildcard ($linuxtype) {
 						'rhel*' {
-							Checking_Package "device-mapper-multipath" $linuxtype
-							Checking_Package "lsscsi" $linuxtype
-							Checking_Package "iscsi-initiator-utils" $linuxtype
+							if(Checking_Package "device-mapper-multipath" $linuxtype) {$bFoundError = $True}
+							if(Checking_Package "lsscsi" $linuxtype) {$bFoundError = $True}
+							if(Checking_Package "iscsi-initiator-utils" $linuxtype) {$bFoundError = $True}
 						}
 						'debian*' {
-							Checking_Package "multipath-tools" $linuxtype
-							Checking_Package "lsscsi" $linuxtype
-							Checking_Package "open-iscsi" $linuxtype
+							if(Checking_Package "multipath-tools" $linuxtype) {$bFoundError = $True}
+							if(Checking_Package "lsscsi" $linuxtype) {$bFoundError = $True}
+							if(Checking_Package "open-iscsi" $linuxtype) {$bFoundError = $True}
 						}
 					}
 					
@@ -1391,13 +1546,13 @@ function Linux_Validator {
 
 					switch -Wildcard ($linuxtype) {
 						'rhel*' {
-							Checking_Service "multipathd" $linuxtype
-							Checking_Service "iscsid" $linuxtype
+							if(Checking_Service "multipathd" $linuxtype) {$bFoundError = $True}
+							if(Checking_Service "iscsid" $linuxtype) {$bFoundError = $True}
 						}
 						'debian*' {
-							Checking_Service "multipathd" $linuxtype
-							Checking_Service "iscsid" $linuxtype
-							Checking_Service "open-iscsi" $linuxtype
+							if(Checking_Service "multipathd" $linuxtype) {$bFoundError = $True}
+							if(Checking_Service "iscsid" $linuxtype) {$bFoundError = $True}
+							if(Checking_Service "open-iscsi" $linuxtype) {$bFoundError = $True}
 						}
 					}
 
@@ -1407,21 +1562,11 @@ function Linux_Validator {
 					# Get multipath.conf file from server 
 					InfoMessage "$MessageCounter - Running validation for MPIO configuration"
 					$command = "test -f /etc/multipath.conf && echo true || echo false"
-					if($bLocalServer) {
-						$multipathconffileexists = Invoke-Expression $command
-					}
-					else {
-						$multipathconffileexists = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					$multipathconffileexists = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 					if ($multipathconffileexists -match "true")	{
 						$command = "cat /etc/multipath.conf"
-						if($bLocalServer) {
-							$multipathconf = Invoke-Expression $command
-						}
-						else {
-							$multipathconf = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-						}
+						$multipathconf = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						
 						# 	Write the Multipath into the HTML file
 						InfoMessage "File - /etc/multipath.conf - Content:"
@@ -1439,11 +1584,6 @@ function Linux_Validator {
 						$devnode_param2             = "^hd[a-z]","^hd[a-z]"
 						$devnode_param3             = "^sda$","^sda$"
 
-						# blacklist Device section
-						#$obj                        = new-object PSObject -Property @{"vendor"="NVME"; "product"='"Microsoft NVMe Direct Disk"'}
-						#$obj2                       = new-object PSObject -Property @{"vendor"="Msft"; "product"='"*"'}
-						# $blacklist_devices          = @($obj,$obj2);
-						
 						# devices sesction
 						$vendor_param_KMNRIO        = '\"KMNRIO"' , "KMNRIO"
 						$vendor_param_SILK          = '\"SILK"' , "SILK"
@@ -1489,6 +1629,7 @@ function Linux_Validator {
 
 						if(!$defaults_line_check) {
 							BadMessage "Could not found the defaults section in Multipath.conf, skipping checking Multipath defaults Section"
+							$bFoundError = $True
 						}
 						else {
 							# Get the lines
@@ -1497,73 +1638,33 @@ function Linux_Validator {
 							$defaults_data   = ($multipathconf[($defaults_line_b-1) .. ($defaults_line_e -1)]).trim()
 
 							# Multipath defaults Parameters Section
-							ValidateAttrinuteInMpio -Mpio_Section_Name "defaults" -Mpio_Section_Data $defaults_data -Parameter_name "user_friendly_names" -Parameter_value_array $user_friendly_names_param
-							ValidateAttrinuteInMpio -Mpio_Section_Name "defaults" -Mpio_Section_Data $defaults_data -Parameter_name "polling_interval" -Parameter_value_array $polling_interval_param
-							ValidateAttrinuteInMpio -Mpio_Section_Name "defaults" -Mpio_Section_Data $defaults_data -Parameter_name "find_multipaths" -Parameter_value_array $find_multipaths_param
-							ValidateAttrinuteInMpio -Mpio_Section_Name "defaults" -Mpio_Section_Data $defaults_data -Parameter_name "verbosity" -Parameter_value_array $verbosity_param
+							if(ValidateAttrinuteInMpio -Mpio_Section_Name "defaults" -Mpio_Section_Data $defaults_data -Parameter_name "user_friendly_names" -Parameter_value_array $user_friendly_names_param) {$bFoundError = $True}
+							if(ValidateAttrinuteInMpio -Mpio_Section_Name "defaults" -Mpio_Section_Data $defaults_data -Parameter_name "polling_interval" -Parameter_value_array $polling_interval_param) {$bFoundError = $True}
+							if(ValidateAttrinuteInMpio -Mpio_Section_Name "defaults" -Mpio_Section_Data $defaults_data -Parameter_name "find_multipaths" -Parameter_value_array $find_multipaths_param) {$bFoundError = $True}
+							if(ValidateAttrinuteInMpio -Mpio_Section_Name "defaults" -Mpio_Section_Data $defaults_data -Parameter_name "verbosity" -Parameter_value_array $verbosity_param) {$bFoundError = $True}
 						}
 
 						if(!$blacklist_line_check) {
 							BadMessage "Could not found the blacklist section in Multipath.conf, skipping checking Multipath blacklist Section"
+							$bFoundError = $True
 						}
 						else {
 							$blacklist_line_b = $outItems_array[($outItems_array | Select-String -Pattern 'blacklist {' | Select-Object -ExpandProperty LineNumber)]
 							$blacklist_line_e = $outItems_array[($outItems_array | Select-String -Pattern 'blacklist {' | Select-Object -ExpandProperty LineNumber)+1]
 							$blacklist_data  = ($multipathconf[($blacklist_line_b-1) .. ($blacklist_line_e -1)]).trim()
 
-							$blacklist_device_line = $blacklist_data | Select-String -Pattern 'device {' | Select-Object -ExpandProperty LineNumber
+							# $blacklist_device_line = $blacklist_data | Select-String -Pattern 'device {' | Select-Object -ExpandProperty LineNumber
 							
 							# Multipath blacklist Parameters Section
 							InfoMessage "Running validation for Multipath configuration - blacklist Section"
-							ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param1
-							ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param2
-							ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param3
-
-							# Multipath blacklist_devices devices Parameters Section
-							For ($i=0; $i -lt ($blacklist_device_line.count); $i++) {
-								# Reset the temp device
-								$device = $NULL
-
-								if (($i+1) -eq $blacklist_device_line.count) {
-									$device = ($blacklist_data[($blacklist_device_line[$i]-1) .. (($blacklist_data.Length) -2)]).trim()
-								}
-								else {
-									$device = ($blacklist_data[($blacklist_device_line[$i]-1) .. (($blacklist_device_line[$i+1] -2))]).trim()
-								}
-
-								InfoMessage "Running validation for Multipath configuration - blacklist devices number - $($i+1)"
-								
-								[System.Boolean]$bFound = $false
-								$vendor = ($device) -match ("vendor")
-								if ($vendor) {
-									switch  -wildcard ($vendor)	{
-										"*NVME*" {
-											GoodMessage "Device vendor NVME value is properly configured according to Silk's BP, continue with other properties"
-										
-											# Multipath device Parameters Section
-											ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist_Device" -Mpio_Section_Data $device -Parameter_name "product" -Parameter_value_array "Microsoft NVMe Direct Disk"	
-											break
-										}
-										"*Msft*" {
-											GoodMessage "Device vendor Msft value is properly configured according to Silk's BP, continue with other properties"
-										
-											# Multipath device Parameters Section
-											ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist_Device" -Mpio_Section_Data $device -Parameter_name "#product" -Parameter_value_array """*"""
-											break
-										}
-										default { 
-											WarningMessage "Device vendor value is not among list of - NVME / Msft, but to - $($vendor), skipping this device"
-										}
-									}
-								}
-								else { 
-									BadMessage "multipath.conf - Device $($i+1) is missing vendor, skipping this device"
-								}
-							}
+							if(ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param1) {$bFoundError = $True}
+							if(ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param2) {$bFoundError = $True}
+							if(ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist" -Mpio_Section_Data $blacklist_data -Parameter_name "devnode" -Parameter_value_array $devnode_param3) {$bFoundError = $True}
 						}
 
 						if(!$devices_line_check) {
 							BadMessage "Could not found the devices section in Multipath.conf, skipping checking devices Multipath Section"
+							$bFoundError = $True
 						}
 						else {
 							$devices_line_b = $outItems_array[($outItems_array | Select-String -Pattern 'devices {' | Select-Object -ExpandProperty LineNumber)]
@@ -1592,50 +1693,55 @@ function Linux_Validator {
 									if(!($vendor -match $vendor_param_KMNRIO[0]) -AND !($vendor -match $vendor_param_SILK[0])) {
 										WarningMessage "Device vendor value is not set to - $($vendor_param_KMNRIO[1]) or $($vendor_param_SILK[1]), but to - $($vendor), skipping this device"
 									}
-									else {									
+									else {
 										# Multipath device Parameters Section
 										if($vendor -match $vendor_param_KMNRIO[0]) {
 											GoodMessage "Device vendor $($vendor_param_KMNRIO[1]) or is properly configured according to Silk's BP, continue with other device properties"
-											ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "product" -Parameter_value_array $product_param_KDP
+											if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "product" -Parameter_value_array $product_param_KDP) {$bFoundError = $True}
 										}
 										else {
 											GoodMessage "Device vendor $($vendor_param_SILK[1]) or is properly configured according to Silk's BP, continue with other device properties"
 											if($device -match $product_param_KDP[0]) {
-												ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "product" -Parameter_value_array $product_param_KDP
+												if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "product" -Parameter_value_array $product_param_KDP) {$bFoundError = $True}
 												$venodr_param_SILK_KDP = $True
 											}
 											elseif($device -match $product_param_SDP[0]){
-												ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "product" -Parameter_value_array $product_param_SDP
+												if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "product" -Parameter_value_array $product_param_SDP) {$bFoundError = $True}
 												$venodr_param_SILK_SDP = $True
 											}
 											else {
 												BadMessage "Could not found product $($product_param_KDP[1]) or $($product_param_SDP[1]) in the current device with vendor $($vendor_param_SILK[1])"
+												$bFoundError = $True
 											}
 										}
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "path_grouping_policy" -Parameter_value_array $path_grouping_policy_param
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "path_checker" -Parameter_value_array $path_checker_param
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "path_selector" -Parameter_value_array $path_selector_parm
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "no_path_retry" -Parameter_value_array $no_path_retry_param
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "hardware_handler" -Parameter_value_array $hardware_handler_param
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "failback" -Parameter_value_array $failback_param
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "fast_io_fail_tmo" -Parameter_value_array $fast_io_fail_tmo_param
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "dev_loss_tmo" -Parameter_value_array $dev_loss_tmo_param
-										ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "max_sectors_kb" -Parameter_value_array $max_sectors_kb_param
+
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "path_grouping_policy" -Parameter_value_array $path_grouping_policy_param) {$bFoundError = $True}
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "path_checker" -Parameter_value_array $path_checker_param) {$bFoundError = $True}
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "path_selector" -Parameter_value_array $path_selector_parm) {$bFoundError = $True}
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "no_path_retry" -Parameter_value_array $no_path_retry_param) {$bFoundError = $True}
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "hardware_handler" -Parameter_value_array $hardware_handler_param) {$bFoundError = $True}
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "failback" -Parameter_value_array $failback_param) {$bFoundError = $True}
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "fast_io_fail_tmo" -Parameter_value_array $fast_io_fail_tmo_param) {$bFoundError = $True}
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "dev_loss_tmo" -Parameter_value_array $dev_loss_tmo_param) {$bFoundError = $True}
+										if(ValidateAttrinuteInMpio -Mpio_Section_Name "devices_device" -Mpio_Section_Data $device -Parameter_name "max_sectors_kb" -Parameter_value_array $max_sectors_kb_param) {$bFoundError = $True}
 									}
 								}
 								else { 
 									BadMessage "multipath.conf - Device $($i+1) is missing vendor, skipping this device"
+									$bFoundError = $True
 								}
 							}	
 						}
 
 						if((!($venodr_param_SILK_KDP)) -OR (!($venodr_param_SILK_SDP)))	{
 							BadMessage "Vendor SILK with products KDP (Found = $venodr_param_SILK_KDP) & SDP (Found = $venodr_param_SILK_SDP), Please validate and fix the multipath.conf!"
+							$bFoundError = $True
 						}
 
 						InfoMessage "Running validation for Multipath configuration - blacklist_exceptions Section"
 						if(!$blacklist_exceptions_line_check) {
 							BadMessage "Could not found the blacklist exceptions section in Multipath.conf, skipping checking blacklist_exceptions Multipath Section"
+							$bFoundError = $True
 						}
 						else {
 							$blacklist_exceptions_line_b = $outItems_array[($outItems_array | Select-String -Pattern 'blacklist_exceptions {' | Select-Object -ExpandProperty LineNumber)]
@@ -1643,11 +1749,12 @@ function Linux_Validator {
 							$blacklist_exceptions_data   = ($multipathconf[($blacklist_exceptions_line_b-1) .. ($blacklist_exceptions_line_e -1)]).trim()
 
 							# Multipath blacklist exceptions Parameters Section
-							ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist_exceptions" -Mpio_Section_Data $blacklist_exceptions_data -Parameter_name "property" -Parameter_value_array $property_parm
+							if(ValidateAttrinuteInMpio -Mpio_Section_Name "blacklist_exceptions" -Mpio_Section_Data $blacklist_exceptions_data -Parameter_name "property" -Parameter_value_array $property_parm) {$bFoundError = $True}
 						}
 					}
 					else {
 						BadMessage "multipath.conf not found on /etc/multipath.conf"
+						$bFoundError = $True
 					}
 
 					$MessageCounter++
@@ -1658,38 +1765,31 @@ function Linux_Validator {
 					# Get /usr/lib/udev/rules.d/98-sdp-io.rules file from server 
 					$ID_SERIAL_scheduler_param_noop = '\"noop"' , "noop"
 					$DM_UUID_scheduler_param_noop   = '\"noop"' , "noop"
-					$ID_SERIAL_scheduler_param_none = '\"none"' , "none"					
+					$ID_SERIAL_scheduler_param_none = '\"none"' , "none"
 					$DM_UUID_scheduler_param_none   = '\"none"' , "none"
 					$ID_SERIAL_device_timeout_param = '\"300"' , "300"
 
+					# Get udev.rules file from server 
+					$udev_file_path = "/usr/lib/udev/rules.d/98-sdp-io.rules"
+
 					# Get multipath.conf file from server 
-					$command = "test -f /usr/lib/udev/rules.d/98-sdp-io.rules && echo true || echo false"
-					if($bLocalServer) {
-						$ioschedulersfileexists = Invoke-Expression $command
-					}
-					else {
-						$ioschedulersfileexists = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					$command = "test -f $udev_file_path && echo true || echo false"
+					$ioschedulersfileexists = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 					
 					if($ioschedulersfileexists -match "true") {
-						$command = "cat /usr/lib/udev/rules.d/98-sdp-io.rules"
-						if($bLocalServer) {
-							$ioschedulers = Invoke-Expression $command
-						}
-						else {
-							$ioschedulers = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-						}
+						$command = "sudo cat $udev_file_path"
+						$ioschedulers = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 						# 	Write the 98-sdp-io.rules into the HTML file
-						InfoMessage "File - /usr/lib/udev/rules.d/98-sdp-io.rules - Content:"
+						InfoMessage "File - $($udev_file_path) - Content:"
 						handle_string_array_messages ($ioschedulers |out-string).trim() "Data"
 
 						# Cleanup empty spaces and rows
 						$ioschedulersData = $ioschedulers.Trim() | where-object {$_}
 
 						# Get only the relavant rows
-						# We have definations of 2002* (need to be 5)						
-						$ioschedulersD1 = $ioschedulersData -match "2002*"						
+						# We have definations of 2002* (need to be 5)
+						$ioschedulersD1 = $ioschedulersData -match "2002*"
 						
 						# Validate 98-sdp-io.rules - Example (10 Lines)
 						# ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="noop"
@@ -1703,23 +1803,23 @@ function Linux_Validator {
 						# ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="noop"
 						# ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="none"
 
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_noop
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_noop
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_none
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_none
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*device/timeout" -Parameter_value_array $ID_SERIAL_device_timeout_param
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_noop) {$bFoundError = $True}
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_noop) {$bFoundError = $True}
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_none) {$bFoundError = $True}
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_none) {$bFoundError = $True}
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD1 -Parameter_name "ID_SERIAL}.*device/timeout" -Parameter_value_array $ID_SERIAL_device_timeout_param) {$bFoundError = $True}
 						
 						# We have definations of 280b* (need to be 5)
 						$ioschedulersD2 = $ioschedulersData -match "280b*"
 
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_noop
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_noop
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_none
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_none
-						ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*device/timeout" -Parameter_value_array $ID_SERIAL_device_timeout_param
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_noop) {$bFoundError = $True}
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_noop) {$bFoundError = $True}
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_none) {$bFoundError = $True}
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_none) {$bFoundError = $True}
+						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulersD2 -Parameter_name "ID_SERIAL}.*device/timeout" -Parameter_value_array $ID_SERIAL_device_timeout_param) {$bFoundError = $True}
 					}
 					else {
-						BadMessage "98-sdp-io.rules not found on /usr/lib/udev/rules.d/98-sdp-io.rules"
+						BadMessage "98-sdp-io.rules not found on $($udev_file_path)"
 					}
 
 					$MessageCounter++
@@ -1727,13 +1827,9 @@ function Linux_Validator {
 
 					InfoMessage "$MessageCounter - Running validation for Linux TRIM/UNmap (fstrim) option"
 					
-					$command = "cat /etc/fstab | grep -i 'discard'"
-					if($bLocalServer) {
-						$fstab = Invoke-Expression $command
-					}
-					else {
-						$fstab = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					$command = "cat /etc/fstab | grep -i discard"
+					$fstab = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+					
 					if($fstab) {
 							WarningMessage "Please check if the rows that contain the discard are Silk Devices"
 					}
@@ -1746,15 +1842,13 @@ function Linux_Validator {
 
 					InfoMessage "$MessageCounter - iSCSI IQN & Sessions Section"
 
+					# Checking the iscsid.conf file
+					if(Checking_File_Content -FilePath "/etc/iscsi/iscsid.conf" -FileConParameter "node.startup" -FileConSeparator "=" -FileConValue "automatic") {$bFoundError = $True}
+
 					# IQN Name
 					# cat /etc/iscsi/initiatorname.iscsi
 					$command = "sudo cat /etc/iscsi/initiatorname.iscsi | grep InitiatorName="
-					if($bLocalServer) {
-						$IQN_Data = Invoke-Expression $command
-					}
-					else {
-						$IQN_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					$IQN_Data = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 					# Write it:
 					if($IQN_Data) {
@@ -1767,12 +1861,7 @@ function Linux_Validator {
 					# Number of iSCSI sessions 
 					# iscsiadm -m session | grep tcp | wc -l
 					$command = "sudo iscsiadm -m session | grep tcp | wc -l"
-					if($bLocalServer) {
-						$iSCSISession_Data = Invoke-Expression $command
-					}
-					else {
-						$iSCSISession_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					$iSCSISession_Data = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 					# Write it:
 					DataMessage "Total Number of iSCSI session is - $($iSCSISession_Data)"
@@ -1781,13 +1870,8 @@ function Linux_Validator {
 						# Number of sessions per c-node
 						InfoMessage "How iSCSI Sessions distributed between c-nodes"
 						$command = "sudo netstat -antup | grep 3260 | grep ESTABLISHED | tr -s ' ' | cut -f5 -d ' ' | cut -f1 -d ':' | sort | uniq -c"
-						if($bLocalServer) {
-							$iSCSISession_Per_Cnode = Invoke-Expression $command
-						}
-						else {
-							$iSCSISession_Per_Cnode = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-						}
-
+						$iSCSISession_Per_Cnode = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+						
 						# Write it:
 						handle_string_array_messages ($iSCSISession_Per_Cnode | ForEach-Object { $_.Trim() } | out-string).Trim() "Data"
 						
@@ -1798,40 +1882,36 @@ function Linux_Validator {
 
 						# Multipath Configuration
 						# cat /etc/iscsi/initiatorname.iscsi
-						$command = "sudo multipath -ll | grep -i KMNRIO -A 2"
-						if($bLocalServer) {
-							$Multipath_dm_data = Invoke-Expression $command
-						}
-						else {
-							$Multipath_dm_data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-						}
+						$command = "sudo multipath -ll | grep -E 'KMNRIO|SILK' -A 2"
+						$Multipath_dm_data = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 						# Write it:
 						handle_string_array_messages ($Multipath_dm_data | Out-String).Trim() "Data"
 
 						# Verify that the scheduler is configured to noop
 						InfoMessage "UDEV Rules settings per dm device (If there is)"
-						$command1 = 'sudo multipath -ll | grep KMNRIO | awk ''{print $3}'' | sort -n'
-						$command  = 'sudo bash -c ''for dm in XXXXX ; do (echo -ne "$dm" - ; echo $(sudo cat /sys/class/block/"$dm"/queue/scheduler)) ;done | sort -n'''
-						if($bLocalServer) {
-							$Device_IO_Rule = ((Invoke-Expression $command1) -join " ").trim()
-							$command        = $command.replace("XXXXX",$Device_IO_Rule)
-							$Device_IO_Rule = Invoke-Expression $command
+						$command1 = 'sudo multipath -ll | grep -E ''KMNRIO|SILK'' | awk ''{print $3}'' | sort -n'
+						$command  = 'sudo bash -c ''for dm in XXXXX ; do (echo -ne "$dm" - ; echo $(sudo cat /sys/class/block/"$dm"/queue/scheduler; sudo cat /sys/class/block/"$dm"/queue/max_sectors_kb)) ;done | sort -n'''
 
-						}
-						else {
-							$Device_IO_Rule = ((plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command1) -join " ").trim()
-							$command        = $command.replace("XXXXX",$Device_IO_Rule)
-							$Device_IO_Rule = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-						}
+						$Device_IO_Rule = ((Invoke-LinuxCommand -Command $command1 -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer) -join " ").trim()
+						$command        = $command.replace("XXXXX",$Device_IO_Rule)
+						$Device_IO_Rule = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 						# Write it:
-						handle_string_array_messages ($Device_IO_Rule |Out-String).Trim() "Data"
+						handle_string_array_messages ($Device_IO_Rule | Out-String).Trim() "Data"
 					}
 					
 					$MessageCounter++
 					PrintDelimiter
 				}
+			}
+
+			# Update the summary 
+			if ($bFoundError) {
+				$script:NumOfFailedHosts += 1
+			}
+			else {
+				$script:NumOfSucessHosts += 1
 			}
 
 			InfoMessage "Validation for $($Server) completed."
@@ -1845,7 +1925,6 @@ function Linux_Validator {
 		# Get the exception messages
 		$ExceptionMessage = $_.Exception.Message
 		$line = $_.InvocationInfo.ScriptLineNumber
-
 		BadMessage "Caught exception during Linux Validator at line: $($line)"
 		BadMessage $ExceptionMessage
 	}
@@ -1884,7 +1963,17 @@ else {
 	# clear the console
 	clear-host
 
-	$MessageCurrentObject = "Silk Validator pre-Checking"
+	# Local Variables for Summary
+	[string]$script:HostList      = ""
+	[int]$script:NumOfHosts       = 0
+	[int]$script:NumOfSucessHosts = 0
+	[int]$script:NumOfFailedHosts = 0
+	[int]$script:NumOfUnreachableHosts = 0
+
+	$MessageCurrentObject = "Silk Cloud Validator pre-Checking"
+
+	# Start time 
+	$bDate = Get-date
 
 	# Print the PowerShell versions and edtion
 	InfoMessage "Silk Validator for Prodcut - $($ValidatorProduct)"
@@ -1928,17 +2017,25 @@ else {
 					[string[]]$LinuxServerarray = @()
 					$LinuxServerString = read-host  ("Linux Server -Specify the Servers names or IP addresses to connect to (comma as a separation between them).`nPress enter if you want check local server with logon user")
 					$LinuxServerString = TrimHostNames $LinuxServerString
+					$script:HostList   = $LinuxServerString
 					$LinuxServerarray  = $LinuxServerString.split(",")
 	
 					# Check the Windows servers, if it empty run this with local user
 					if ([string]::IsNullOrEmpty($LinuxServerarray)) {
 						Linux_Validator $LinuxServerarray
+
+						# Summary Data - Runing locally
+						$script:NumOfHosts = 1
+						$script:HostList   = hostname
 					}
 					else {
 						$Credential = $host.ui.PromptForCredential("Silk BP credentials", "Please enter your Linux username and password.", "", "")
 						Linux_Validator $LinuxServerarray $Credential 
+
+						# Summary Data - Number of hosts
+						$script:NumOfHosts = $LinuxServerarray.Count
 					}
-				}				
+				}
 				# Windows
 				"Windows" {
 					Write-Host -ForegroundColor Yellow "This script gets Windows servers as input and validates servers parameters according to Silk's best practices."	
@@ -1951,6 +2048,10 @@ else {
 					# Check the Windows servers, if it empty run this with local user
 					if ([string]::IsNullOrEmpty($WindowsServerarray)) {
 						Windows_Validator $WindowsServerarray
+
+						# Summary Data - Runing locally
+						$script:NumOfHosts = 1
+						$script:HostList   = $env:COMPUTERNAME
 					}
 					else {
 						# Choose user for the validator
@@ -1960,6 +2061,9 @@ else {
 							write-host -ForegroundColor Red "Invalid entry, please enter 'Y' or 'N' to continue"
 							$WinCredential = read-host ("Windows Credential - using $(whoami) Login user (Y/N), N = or diffrenet user")
 						}
+
+						# Summary Data - Number of arrays
+						$script:NumOfHosts = $WindowsServerarray.Count
 
 						if($WinCredential -match "[yY]") {
 							Windows_Validator $WindowsServerarray
@@ -1971,6 +2075,25 @@ else {
 					}
 				}
 			}
+
+			# Summary the data
+			# Add end and total time to HTML
+			$SDPBPHTMLBody += "<div id='host_space'>Summary Table</div>"
+			InfoMessage "Summary - Host list is/are - $($script:HostList)"
+			InfoMessage "Summary - Number of Hosts - $($script:NumOfHosts)"
+			GoodMessage "Summary - Number of Success Hosts - $($script:NumOfSucessHosts - $script:NumOfUnreachableHosts)"
+			WarningMessage "Summary - Number of unreachable Hosts - $($script:NumOfUnreachableHosts)"
+			BadMessage "Summary - Number of Failed Hosts - $($script:NumOfFailedHosts)"
+			
+			# Begin and End Times
+			$eDate = Get-date
+			$tDate = New-TimeSpan -Start $bDate -End $eDate
+
+			# Add end and total time to HTML
+			$SDPBPHTMLBody += "<div id='host_space'>Validator Execution Time</div>"
+			InfoMessage "Time - Validator starting time is - $($bDate)"
+			InfoMessage "Time - Validator ending time is - $($eDate)"
+			InfoMessage "Time - Validator total time (Sec) - $($tDate.TotalSeconds)"
 
 			# Generate HTML Report File
 			InfoMessage "Creating HTML Report..."
