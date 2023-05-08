@@ -1189,8 +1189,8 @@ function Windows_Validator {
 					InfoMessage "$MessageCounter - Running validation for Load Balance and Failover Policy for Individual Volumes"
 
 					# Get all disks and their associated physical disks by SerialNumber (using with CimSession for local and remote servers)
-					$SilkFriendlyNames = @("KMNRIO K2","SILK K2","SILK SDP")					
-					$disks = invoke-Command -Session $pssessions -ArgumentList $SilkFriendlyNames -ScriptBlock {param($arr) Get-Disk | Where-Object {
+					[string[]]$SilkFriendlyNames = @("KMNRIO K2","SILK K2","SILK KDP","SILK SDP")
+					$disks = invoke-Command -Session $pssessions -ArgumentList (,$SilkFriendlyNames) -ScriptBlock {param($arr) Get-Disk | Where-Object {
 						$diskName = $_.FriendlyName
 						$arr | ForEach-Object {
 							$pattern = [regex]::Escape($_)
