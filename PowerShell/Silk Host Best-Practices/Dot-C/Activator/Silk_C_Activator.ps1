@@ -1,31 +1,16 @@
 <#
- .SYNOPSIS
- This script gets various arguments and activate the Silk BP against the host initiator.
-
- .DESCRIPTION
- This script gets a Host Type as inputs and activates according to Silk's best practices.
- This script working and supporting on Windows and Linux types.
-
- Versions:
- 20-Dec-2021 - Current version V1.0.0
- 01-Jan-2022 - Current version V1.0.1
- 11-May-2022 - Current version V1.0.2
- 24-Jul-2022 - Current version V1.0.3
-    
- .NOTES
- Dec 2021
- Script Silk Activator for DotC product created. 
-
- Jan 2022
- * (Win) Adjust MPIO DiskTimeoutValue value 45 -> 100
- * (Lin) Adjust multipath.conf to support new vendor and product
- 
- May 2022
- * (Win) Checking and Validate the CTRL LU
-
- Jul 2022
- * (Win) Added activation regarding TRIM/Unmap in Windows.
- * (Lin) udev rules for Linux.
+    ===========================================================================================================================================
+    Release version: 2.0.0.0
+    -------------------------------------------------------------------------------------------------------------------------------------------
+    Maintained by:  Aviv.Cohen@Silk.US
+    Organization:   Silk.us, Inc.
+    Filename:       Silk_C_Activator.ps1
+    As Known As:    Silk Dot C Activator PowerShell Script
+    Copyright       (c) 2023 Silk.us, Inc.
+    Description:    Activate Initiator with Silk Best Practices for SDP systems.
+	Host Types:     Activate for Windows and Linux environments
+    ------------------------------------------------------------------------------------------------------------------------------------------
+    ===========================================================================================================================================
 #>
 
 <#
@@ -45,7 +30,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Activator begin of the script - Activate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "1.0.3"
+[string]$SDP_Version = "2.0.0"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "DotC"
@@ -115,14 +100,14 @@ Function InfoMessage {
 
 Function DataMessage {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
-	Write-host "$($MessageCurrentObject) - [Data] - $args"
+	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor
 	$SDPBPHTMLBody += "<div id='DataMessage'>$($MessageCurrentObject) - [Data] - $args</div>"
 }
 
 Function DataMessageBlock {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
-	Write-host "$($MessageCurrentObject) - [Data] - $args"
+	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor	
 	$SDPBPHTMLBody += "<div id='DataMessage'><p id='whitepreclass'>$args</p></div>"
 }
@@ -269,8 +254,8 @@ function TrimHostNames {
 #region handle_string_array_messages
 Function handle_string_array_messages {
 	Param(
-	[string]$StringArray,
-	[string]$MessageType
+		[string]$StringArray,
+		[string]$MessageType
 	)
 
 	switch($MessageType) {
@@ -287,10 +272,8 @@ Function handle_string_array_messages {
 # Get user selection
 Function UserSelections {    
 	param(
-        [parameter(Mandatory)]
-        [string] $title,
-        [parameter()]
-        [string] $defaultValue
+        [parameter(Mandatory)][string] $title,
+        [parameter()][string] $defaultValue
     )	
 
 	if ($defaultValue) {
@@ -318,11 +301,72 @@ Function UserSelections {
 function Windows_Activator {
 	[cmdletbinding()] 
 	Param(	
-		[parameter()]
-		[String[]]$WinServerArray,	
-		[System.Management.Automation.PSCredential]	
-		$Credential = [System.Management.Automation.PSCredential]::Empty
+			[parameter()][String[]]$WinServerArray,	
+			[System.Management.Automation.PSCredential]$Credential = [System.Management.Automation.PSCredential]::Empty
 		)
+
+	#region RemoteServerDiskInfo
+	# Internal function RemoteServerDiskInfo
+	Function RemoteServerDiskInfo {
+		param (
+			[parameter()]$pssessions_local,
+			[parameter()]$cimsession_local
+			)
+
+		# Get all disks and their associated physical disks by SerialNumber (using with CimSession for local and remote servers)
+		[string[]]$SilkFriendlyNames = @("KMNRIO K2","SILK K2","SILK KDP","SILK SDP")
+		$disks = invoke-Command -Session $pssessions_local -ArgumentList (,$SilkFriendlyNames) -ScriptBlock {param($arr) Get-Disk | Where-Object {
+			$diskName = $_.FriendlyName
+			$arr | ForEach-Object {
+				$pattern = [regex]::Escape($_)
+				if ($diskName -match $pattern) {
+					return $true
+				}
+			}
+		} | Select-Object SerialNumber, Number, UniqueId, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle}
+		$physicalDisks = invoke-Command -Session $pssessions_local -ScriptBlock {Get-PhysicalDisk}
+
+		# Create an empty array to store the combined data
+		$server_diskInfo = @()
+
+		# Loop through each disk and find its associated physical disk by SerialNumber,
+		# Foreach disk we find the PhysicalDiskStorageNodeView and Partition (if exist)
+		foreach ($disk in $disks) {
+			$serialNumber = $disk.SerialNumber
+			$physicalDisk = $physicalDisks | Where-Object { $_.SerialNumber -eq $serialNumber }
+			$PhysicalDiskStorageNodeView = get-PhysicalDiskStorageNodeView -CimSession $cimsession_local -PhysicalDisk $physicalDisk
+			$disknumber   = $null
+			$disknumber   = $disk.Number
+			
+			if($disknumber)	{
+				$partitions  = Get-Partition -CimSession $cimsession_local -DiskNumber $disknumber -ErrorAction SilentlyContinue
+				$partition   = $partitions | Where-Object {$_.AccessPaths -ne $null}
+				$driveLetter = $null
+				
+				if ($partition) {
+					$driveLetter = $partition.DriveLetter -join ","
+				}
+			}
+			
+			$combinedDisk = [PSCustomObject]@{
+				DeviceId      = $physicalDisk.DeviceId
+				DiskNumber    = $disknumber
+				SerialNumber  = $serialNumber
+				UniqueId      = $disk.UniqueId
+				FriendlyName  = $disk.FriendlyName
+				LoadBalancePolicy = $PhysicalDiskStorageNodeView.LoadBalancePolicy
+				CanPool      = $physicalDisk.CanPool
+				OperationalStatus = $physicalDisk.OperationalStatus
+				HealthStatus = $physicalDisk.HealthStatus
+				SizeGB       = [math]::Round($disk.Size/1GB,4)
+				DriveLetter  = $driveLetter
+				DiskStatus   = $disk.OperationalStatus
+				PartitionStyle = $disk.PartitionStyle
+			}
+			$server_diskInfo += $combinedDisk
+		}
+		return $server_diskInfo
+	}
 
 	# Start script initialization	
 	$MessageCurrentObject = "Windows Activator"
@@ -379,37 +423,22 @@ function Windows_Activator {
 
 				if($bool_local_user) {
 					$pssessions = New-PSSession
+					$CIMsession = New-CimSession
 				}
 				else {
 					# Initialization pssessions
 					if($Credential -ne [System.Management.Automation.PSCredential]::Empty) {
-						$pssessions = New-PSSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction Stop
+						$pssessions = New-PSSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction SilentlyContinue
+						$CIMsession = New-CimSession -ComputerName $WinServer -Credential $Credential -Authentication Negotiate -ErrorAction SilentlyContinue
 					}
 					else {
-						$pssessions = New-PSSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction Stop
+						$pssessions = New-PSSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction SilentlyContinue
+						$CIMsession = New-CimSession -ComputerName $WinServer -Authentication Kerberos -ErrorAction SilentlyContinue
 					}
 				}
 
 				# Reseting the counter message sections
 				[int]$MessageCounter = 1
-
-				# Write to html the OS version and caption
-				InfoMessage "$MessageCounter - Windows Server Information"
-				$WinOSVersionCaption = (Invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -class Win32_OperatingSystem).Caption})
-				$WinOSVersion        = (Invoke-Command -Session $pssessions -ScriptBlock {[Environment]::OSVersion})
-				DataMessage "Windows OS Caption is - $($WinOSVersionCaption)"
-				DataMessage "Windows OS Version is - $($WinOSVersion.VersionString)"
-
-				# Write the Windows Server Extra data (CPU & Memory)
-				$WinOSCPU    = (Invoke-Command -Session $pssessions -ScriptBlock {(Get-CimInstance Win32_ComputerSystem)})
-				$WinOSMemory = (Invoke-Command -Session $pssessions -ScriptBlock {((Get-CimInstance CIM_PhysicalMemory).Capacity | Measure-Object -Sum).Sum / (1024 * 1024 * 1024)})
-
-				DataMessage "Number Of Processors (Sockets) - $($WinOSCPU.NumberOfProcessors)"
-				DataMessage "Number Of Logical Processors (vCPUs) - $($WinOSCPU.NumberOfLogicalProcessors)"
-				DataMessage "Total Physical Memory (GiB) - $($WinOSMemory)"
-
-				$MessageCounter++
-				PrintDelimiter 
 
 				# iSCSI Section
 				PrintDescription "Category: SAN Connectivity related.`nParameter type: The ISCSI settings are global parameters and may impact other attached storage arrays.`nDescription: The ISCSI settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
@@ -422,7 +451,7 @@ function Windows_Activator {
 
 				# Settings LQD Silk Disk
 				PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: Disk Load Balance Policy Settings.`nDescription: Setting the Silk Disks Load Balance Policy to Least Queue Depth (LQD)" 
-				$MPIO_LoadBalancePolicy = UserSelections "MPIO " "Disk Load Balance Policy (LQD)"
+				$MPIO_LoadBalancePolicy = UserSelections "MPIO" "Disk Load Balance Policy (LQD)"
 
 				# Settings CTRL Silk Disk OFFLINE
 				PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets" 
@@ -439,7 +468,8 @@ function Windows_Activator {
 				# Acitviation iSCSI Service according to BP
 				if($ISCSI_Service) {
 					InfoMessage "$MessageCounter - Running activation for iSCSI service"
-					$MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
+					# $MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
+					$MSiSCSI = Get-CimInstance -CimSession $CIMsession -Class Win32_Service -Filter "Name='MSiSCSI'"
 					
 					if($MSiSCSI) {
 						if ($MSiSCSI.State -match "Running") {
@@ -690,6 +720,9 @@ function Windows_Activator {
 				$MessageCounter++
 				PrintDelimiter
 
+				# Init empty server disk.
+				$server_diskInfo = @()
+
 				# Load Balance and Failover Policy for Individual Volumes
 				if($MPIO_LoadBalancePolicy)	{
 					InfoMessage "$MessageCounter - Running Activiation for Load Balance and Failover Policy for Individual Volumes"
@@ -698,17 +731,23 @@ function Windows_Activator {
 					$mpclaim_installed = (invoke-Command -Session $pssessions -ScriptBlock {Get-Command mpclaim.exe})
 
 					if($mpclaim_installed) {
-						# Load Balance and Failover Policy for Individual Volumes
-						$Server_KMNRIO_PD = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO KDP") -OR ($_.FriendlyName -match "KMNRIO SDP") -OR ($_.FriendlyName -match "SILK KDP") -OR ($_.FriendlyName -match "SILK SDP")} | Sort-Object DeviceID | `
-						Select-object SerialNumber,UniqueId,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}},`
-						@{N="LoadBalancePolicy";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object LoadBalancePolicy).LoadBalancePolicy}})})
+						
+						# Check if the array of disk is empty, if yes, we fill it only once
+						if($server_diskInfo.Count -eq 0) {
+							$server_diskInfo = RemoteServerDiskInfo -pssessions_local $pssessions -cimsession_local $CIMsession
+						}
 
 						# Check the PD count 
-						if($Server_KMNRIO_PD) {
-							# Write the disk list before changing
-							handle_string_array_messages ($Server_KMNRIO_PD | format-table * | Out-String).trim() "Data"
+						if($server_diskInfo.Count -ne 0) {
+							
+							# Sort the disk information and print it into html
+							$server_diskInfo      = $server_diskInfo | Sort-Object SerialNumber
+							$server_diskInfo_out = ($server_diskInfo | Select-Object DeviceId,DiskNumber,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,SizeGB,DriveLetter,DiskStatus,PartitionStyle | Format-Table * -AutoSize | Out-String).Trim()
 
-							foreach ($PD_Temp in $Server_KMNRIO_PD)	{
+							# Print the MPIO into the html
+							handle_string_array_messages $server_diskInfo_out "Data"
+
+							foreach ($PD_Temp in $server_diskInfo)	{
 								# Check for each Individual if it LQD or not
 								if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth") {
 									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
@@ -716,7 +755,8 @@ function Windows_Activator {
 								else {
 									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)"
 									$UniqueID = $PD_Temp.UniqueId.Trim()
-									$MPIODisk = (invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -Namespace root\wmi -Class mpio_disk_info).driveinfo | Select-Object Name,SerialNumber})
+									# $MPIODisk = (invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -Namespace root\wmi -Class mpio_disk_info).driveinfo | Select-Object Name,SerialNumber})
+									$MPIODisk = (Get-CimInstance -CimSession $CIMsession -Namespace root\wmi -Class mpio_disk_info).DriveInfo | Select-Object Name,SerialNumber
 									$MPIODisk = $MPIODisk | Where-Object {$_.SerialNumber -eq $UniqueID}
 									$MPIODiskID = $MPIODisk.Name.Replace("MPIO Disk","")
 									(invoke-Command -Session $pssessions -Args $MPIODiskID -ScriptBlock {mpclaim -l -d $args[0] 4}) | out-null
@@ -742,36 +782,28 @@ function Windows_Activator {
 				if($CTRL_LU_Offline) {
 					InfoMessage "$MessageCounter - Running Activiation for CTRL Silk Disk"
 
-					# Checking if the mpclaim found (if not -> mean that MPIO is not installed)
-					$mpclaim_installed = (invoke-Command -Session $pssessions -ScriptBlock {Get-Command mpclaim.exe})
-					if($mpclaim_installed) {
-						
-						# Load Balance and Failover Policy for Individual Volumes
-						$Server_KMNRIO_PD_CTRL = (invoke-Command -Session $pssessions -ScriptBlock {(Get-PhysicalDisk | Where-Object {($_.FriendlyName -match "KMNRIO KDP") -OR ($_.FriendlyName -match "KMNRIO SDP") -OR ($_.FriendlyName -match "SILK KDP") -OR ($_.FriendlyName -match "SILK SDP")} | `
-						Where-Object {$_.SerialNumber.EndsWith("0000")} | Sort-Object DeviceID | Select-object SerialNumber,@{N="DiskNumber";E={($_ | Get-PhysicalDiskStorageNodeView | Select-Object DiskNumber).DiskNumber}}, `
-						@{N="DiskStatus";E={($_ | Get-Disk | select-object OperationalStatus).OperationalStatus}})})
-
-						if($Server_KMNRIO_PD_CTRL) {
-							# Run over the CTRL disks and verify that each disk is Offline
-							foreach ($PD_Temp in $Server_KMNRIO_PD_CTRL) {
-								# Check for each Individual if it offline or not
-								if ($PD_Temp.DiskStatus -match "Offline") {
-									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
-								}
-								else {
-									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
-									(invoke-Command -Session $pssessions -Args $PD_Temp -ScriptBlock {Get-Disk -SerialNumber $args[0].SerialNumber | Where-Object IsOffline -Eq $False | Set-Disk -IsOffline $True})
-									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DeviceId) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
-								}
+					# Check if the array of disk is empty, if yes, we fill it only once
+					if($server_diskInfo.Count -eq 0) {
+						$server_diskInfo = RemoteServerDiskInfo -pssessions_local $pssessions -cimsession_local $CIMsession
+					}
+					
+					if($server_diskInfo.Count -ne 0) {
+						# Run over the CTRL disks and verify that each disk is Offline
+						foreach ($PD_Temp in ($server_diskInfo | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
+							# Check for each Individual if it offline or not
+							if ($PD_Temp.DiskStatus -match "Offline") {
+								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
 							}
-						}
-						else {
-							InfoMessage "No CTRL SILK SDP Disks found on the server"
+							else {
+								WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
+								Get-Disk -CimSession $CIMsession -SerialNumber $PD_Temp.SerialNumber | Where-Object IsOffline -Eq $False | Set-Disk -IsOffline $True 
+								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
+							}
 						}
 					}
 					else {
-						BadMessage "The mpclaim.exe not found. Check if MPIO Installed and Enabled"
-					}
+						InfoMessage "No CTRL SILK SDP Disks found on the server"
+					}					
 				}
 				else{
 					InfoMessage "$MessageCounter - Skipping CTRL Silk Disk Settings"
@@ -804,14 +836,14 @@ function Windows_Activator {
 
 				if($Defragmentation) {
 					InfoMessage "$MessageCounter - Running activation for Disk Defrag configuration" 
-					$ScheduledDefragTask = (invoke-Command -Session $pssessions -ScriptBlock {(Get-ScheduledTask ScheduledDefrag).state})
+					$ScheduledDefragTask = (Get-ScheduledTask -CimSession $CIMsession -TaskName ScheduledDefrag)
 					if($ScheduledDefragTask) {
-						if($ScheduledDefragTask.value -match "disabled") {
+						if($ScheduledDefragTask.State -match "disabled") {
 							GoodMessage " Scheduled Disk Fragmentation policy value is properly configured according to Silk's BP"
 						}
 						else { 
-							WarningMessage "Scheduled Disk Fragmentation is not set to Disabled but to $($ScheduledDefragTask.value), Disabling ScheduledDefrag Task, starting..." 
-							(invoke-Command -Session $pssessions -ScriptBlock {(Get-ScheduledTask ScheduledDefrag -ErrorAction SilentlyContinue | Disable-ScheduledTask)}) | Out-Null
+							WarningMessage "Scheduled Disk Fragmentation is not set to Disabled but to $($ScheduledDefragTask.State), Disabling ScheduledDefrag Task, starting..." 
+							(Get-ScheduledTask -CimSession $CIMsession ScheduledDefrag | Disable-ScheduledTask -CimSession $CIMsession -ErrorAction SilentlyContinue) | Out-Null
 							GoodMessage "Disabling ScheduledDefrag Task, complete"
 						}
 					}
@@ -826,16 +858,21 @@ function Windows_Activator {
 				$MessageCounter++
 				PrintDelimiter
 
+				# Remove the CIM session
+				if(![string]::IsNullOrEmpty($CIMsession.Id)) {
+					#Disconwnect from the server
+					Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
+					$CIMsession = $null
+					InfoMessage "Remove the CimSession To $($WinServer)"
+				}
+
 				# Remove the PSSession
 				if(![string]::IsNullOrEmpty($pssessions.Id)) {
 					#Remove the Session from the server
 					Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
 					$pssessions = $null
-					InfoMessage "Disconnected from $($WinServer) and remove the PSSession"
-				}
-				else {
-					BadMessage "Could not disconnect properly from $($WinServer)"
-				}
+					InfoMessage "Remove the PSSession To $($WinServer)"
+				}				
 			}
 
 			if($bNeedReboot) {
@@ -862,11 +899,20 @@ function Windows_Activator {
 
 		PrintDelimiterServer
 
+		# Remove the CIM session
+		if(![string]::IsNullOrEmpty($CIMsession.Id)) {
+			#Disconwnect from the server
+			Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
+			$CIMsession = $null
+			InfoMessage "Remove the CimSession To $($WinServer)"
+		}
+
+		# Remove the pssessions
 		if(![string]::IsNullOrEmpty($pssessions.Id)) {
 			#Disconwnect from the server
 			Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
 			$pssessions = $null
-			InfoMessage "Disconnected from $($WinServer)"
+			InfoMessage "Remove the PSSession To $($WinServer)"
 		}
 	}
 }
@@ -876,14 +922,13 @@ function Windows_Activator {
 function Linux_Activator {	
 	[cmdletbinding()] 
 	Param(
-		[parameter()]
-		[string[]]$ServerArray,		
-		[System.Management.Automation.PSCredential] 
-		$Credential = [System.Management.Automation.PSCredential]::Empty
+		[parameter()][string[]]$ServerArray,
+		[System.Management.Automation.PSCredential]$Credential = [System.Management.Automation.PSCredential]::Empty
 	)
 
-	#region InternalSubFunctions
-	# Internal Sub Functions	
+	# Internal Sub Functions
+
+	#region InternalSubFunctions	
 	Function ValidatePlinkExecutable {
 		InfoMessage "Validate Plink Executable."
 		$Plink_Installed = $false
@@ -925,111 +970,128 @@ function Linux_Activator {
 	}
 	#endregion
 
+	#region Install_Package
+	Function Install_Package {
+		Param(		
+			[parameter()][string]$Pacakge,
+			[parameter()][string]$LinuxOSType
+		)
+
+		[System.Boolean]$bPackageInstall = $False
+
+		$bPackageInstall = Checking_Package $Pacakge $linuxtype
+		if($bPackageInstall) {
+			switch -Wildcard ($LinuxOSType) {
+				'rhel*' {
+					$command = "sudo yum -y install $($Pacakge)"
+				}
+				'debian*' {
+					$command = "sudo apt-get -y install $($Pacakge)"
+				}
+			}
+
+			WarningMessage "package $($Pacakge) not Installed, and will be install, Package installation starting..."
+			$rpmInstall = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+			GoodMessage "Package command installation completed"
+
+			# Recheck again if the package was installed
+			Checking_Package $Pacakge $linuxtype
+		}		
+	}
+	#endregion
+
 	#region Checking_Package
 	Function Checking_Package {
 		Param(		
-		[string]$Pacakge,
-		[string]$LinuxOSType
+			[parameter()][string]$Pacakge,
+			[parameter()][string]$LinuxOSType
 		)
 
-		# Checking the PREREQUISITES of the packages that must be installed on the machine (device-mapper-multipath* / lsscsi  / scsi-initiator-utils*)
+		# Return if found error
+		[System.Boolean]$bfoundErrorInFunction = $False
+
+		# Checking the PREREQUISITES of the packages that must be installed on the machine (device-mapper-multipath / lsscsi  / scsi-initiator-utils)
+		# Need commands to be with 2>&1 in the end to get the stderr
 		switch -Wildcard ($LinuxOSType) {
 			'rhel*' {
 				$command = "sudo rpm -qa | grep $($Pacakge)"
-				if($bLocalServer) {
-					$rpmCheck = Invoke-Expression $command
-				}
-				else {
-					$rpmCheck = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-				}
-
-				if ($rpmCheck) {
-					GoodMessage "package $($Pacakge) Installed - version:"
-					handle_string_array_messages ($rpmCheck | Out-String).trim() "Data"
-				}
-				else {
-					$command = "sudo yum -y install $($Pacakge)"
-					WarningMessage "package $($Pacakge) not Installed, and will be install, Package installation starting..."
-					if($bLocalServer) {
-						$rpmInstall = Invoke-Expression $command
-					}
-					else {
-						$rpmInstall = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
-					GoodMessage "Package installation is complete"
-				}
 			}
 			'debian*' {
 				$command = "sudo dpkg -s | grep $($Pacakge)"
-				if($bLocalServer) {
-					$rpmCheck = Invoke-Expression $command
-				}
-				else {
-					$rpmCheck = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-				}
-
-				if ($rpmCheck) {
-					GoodMessage "package $($Pacakge) Installed - version:"
-					handle_string_array_messages ($rpmCheck | Out-String).trim() "Data"
-				}
-				else {
-					$command = "sudo apt-get -y install $($Pacakge)"
-					WarningMessage "package $($Pacakge) not Installed, and will be install, Package installation starting..."
-					if($bLocalServer) {
-						$rpmInstall = Invoke-Expression $command
-					}
-					else {
-						$rpmInstall = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
-					GoodMessage "Package installation is complete"
-				}
 			}
 		}
+		
+		$rpmCheck = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+
+		if ($rpmCheck) {
+			GoodMessage "package $($Pacakge) already Installed - version:"
+			handle_string_array_messages ($rpmCheck | Out-String).trim() "Data"
+		}
+		else {
+			BadMessage "package $($Pacakge) not Installed"
+			$bfoundErrorInFunction = $True
+		}
+
+		# Return $bfoundErrorInFunction value
+		return $bfoundErrorInFunction
 	}
 	#endregion
 
 	#region Checking_Service
 	Function Checking_Service {
 		Param(
-		[string]$Service,
-		[string]$LinuxOSType
+			[parameter()][string]$Service,
+			[parameter()][string]$LinuxOSType
 		)
 
 		# Checking the MPIO and iSCSI Services on the machine
 		[string]$ServiceActive  = "active"
 		[string]$ServiceEnabled = "enabled"
-
+		
 		$command = "sudo systemctl is-active $($Service); sudo systemctl is-enabled $($Service)"
-		if($bLocalServer) {
-			$CheckingServiceStatus = Invoke-Expression $command
-		}
-		else {
-			$CheckingServiceStatus = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof  $command
-		}
+		$CheckingServiceStatus = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
-		# Check if it null`
+		# Check if it null
 		if($CheckingServiceStatus) {
-			$CheckingServiceStatus = $CheckingServiceStatus -join " "
-			if(($CheckingServiceStatus -match $ServiceActive) -AND ($CheckingServiceStatus -match $ServiceEnabled)) {
+			$CheckingServiceStatus_output = $CheckingServiceStatus -join " "
+			if(($CheckingServiceStatus[0] -eq $ServiceActive) -AND ($CheckingServiceStatus[1] -eq $ServiceEnabled))	{
 				GoodMessage "$($Service) service is running and enabled..."
 			}
 			else {
 				$command = "sudo systemctl enable $($Service) ; sudo systemctl start $($Service)"
-				WarningMessage "Service $($Service) is not running or enabled, current state is - $($CheckingServiceStatus), Enabling and Starting Service starting..."
-				if($bLocalServer) {
-					$EnablingService = Invoke-Expression $command
-				}
-				else {
-					$EnablingService = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof  $command
-				}
+				WarningMessage "Service $($Service) is not running or enabled, current state is - $($CheckingServiceStatus_output), Enabling and Starting Service starting..."
+				$EnablingService = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 				InfoMessage "Enabling and Starting Service is completed"
 			}
 		}
 		else {
-			BadMessage "$($Service) service not found, Please installed it."
+			BadMessage "$($Service) service not found (via systemctl), Please installed it."
 		}
 	}
 	#endregion
+
+	#region Invoke-LinuxCommand
+	function Invoke-LinuxCommand {
+		param (
+			[Parameter()][string]$Command,
+			[Parameter()][string]$Server,
+			[Parameter()][string]$LinuxUserName,
+			[Parameter()][string]$LinuxUserPassword,
+			[Parameter()][bool]$UseLocalServer
+		)
+		
+		if ($UseLocalServer) {
+			$rtrValue = Invoke-Expression $Command
+		} else {
+			$rtrValue = Invoke-Expression 'plink -P 22 -ssh $Server -pw $LinuxUserPassword -l $LinuxUserName -no-antispoof $Command'
+		}
+
+		# Return the output of the command
+		return $rtrValue
+	}
+	#endregion
+
+	# End Internal Sub Functions
 
 	# Local Variable
 	[boolean]$bLocalServer = $false
@@ -1048,6 +1110,9 @@ function Linux_Activator {
 
 		# Set local server name - $ServerArray
 		$ServerArray = hostname
+
+		# Init the user and password to empty string
+		$linux_userpassword = $linux_username = ""
 	}
 	else {
 		# Get the user and password of the exeute user
@@ -1107,34 +1172,19 @@ function Linux_Activator {
 					# Checking that "lsb_release" command found
 					$bLinuxDistroFound = $true
 					$command           = "command -v lsb_release"
-					
-					if($bLocalServer) {
-						$checking_lsb_comm = Invoke-Expression $command
-					}
-					else {
-						$checking_lsb_comm = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
+					$checking_lsb_comm = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 					if($checking_lsb_comm) {
 						# Checking the data
 						$command  = "lsb_release -a | grep -E 'Release:|Distributor ID:'"
 						$Splinter = ":"
-						if($bLocalServer) {
-							$Linux_Distro_info = Invoke-Expression $command |  Sort-Object
-						}
-						else {
-							$Linux_Distro_info = (plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command) | Sort-Object
-						}
+						$Linux_Distro_info = (Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer) | Sort-Object
+
 					}
 					else {
 						$command  = "cat /etc/os-release | grep -E '\bID=|\bVERSION_ID='"
 						$Splinter = "="
-						if($bLocalServer) {
-							$Linux_Distro_info = Invoke-Expression $command |  Sort-Object
-						}
-						else {
-							$Linux_Distro_info = (plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command) |  Sort-Object
-						}
+						$Linux_Distro_info = (Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer) | Sort-Object
 
 						if(-not($Linux_Distro_info)) {
 							$bLinuxDistroFound = $false
@@ -1278,35 +1328,7 @@ function Linux_Activator {
 						}
 					}
 
-					InfoMessage "$MessageCounter - Silk Activator - script will activate according to Linux distribution - $($linuxtype)"					
-					PrintDelimiter
-
-					# Print the CPU & Memory
-					$command = "lscpu | grep -E '^CPU|Thread|Socket|Core'"
-					if($bLocalServer) {
-						$CPU_Data = Invoke-Expression $command
-					}
-					else {
-						$CPU_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
-
-					# Print the data
-					InfoMessage "CPU Server Information is:"
-					handle_string_array_messages ($CPU_Data | Out-String).Trim() "Data"
-
-					$command = "cat /proc/meminfo | grep MemTotal"
-					if($bLocalServer) {
-						$Mem_Data = Invoke-Expression $command
-					}
-					else {
-						$Mem_Data = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-					}
-
-					# Print the data
-					InfoMessage "Total Server Memory is:"
-					handle_string_array_messages ($Mem_Data | Out-String).Trim() "Data"
-
-					$MessageCounter++
+					InfoMessage "$MessageCounter - Silk Activator - script will activate according to Linux distribution - $($linuxtype)"
 					PrintDelimiter
 
 					PrintDescription "Category: High Availability related.`nParameter type: iSCSI and Multipath Services and Packages.`nDescription:Installing the iSCSI and Multipath packages and services"
@@ -1323,14 +1345,14 @@ function Linux_Activator {
 						InfoMessage "$MessageCounter - Checking / Enabling / Installing Packages and Services "
 						switch -Wildcard ($linuxtype) {
 							'rhel*' {
-								Checking_Package "device-mapper-multipath" $linuxtype
-								Checking_Package "lsscsi" $linuxtype
-								Checking_Package "iscsi-initiator-utils" $linuxtype
+								Install_Package "device-mapper-multipath" $linuxtype
+								Install_Package "lsscsi" $linuxtype
+								Install_Package "iscsi-initiator-utils" $linuxtype
 							}
 							'debian*' {
-								Checking_Package "multipath-tools" $linuxtype
-								Checking_Package "lsscsi" $linuxtype
-								Checking_Package "open-iscsi" $linuxtype
+								Install_Package "multipath-tools" $linuxtype
+								Install_Package "lsscsi" $linuxtype
+								Install_Package "open-iscsi" $linuxtype
 							}
 						}
 
@@ -1377,15 +1399,6 @@ function Linux_Activator {
 							XXXXXXdevnode ""^(ram|raw|loop|fd|md|dm-|sr|scd|st)[0-9]*""
 							XXXXXXdevnode ""^hd[a-z]""
 							XXXXXXdevnode ""^sda$""
-							XXXXXX# For Azure
-							XXXXXXdevice {
-							XXXXXXXXXXXXvendor  ""NVME""
-							XXXXXXXXXXXXproduct ""Microsoft NVMe Direct Disk""
-							XXXXXX}
-							XXXXXXdevice {
-							XXXXXXXXXXXXvendor  ""Msft""
-							XXXXXXXXXXXX#product ""*""
-							XXXXXX}
 							}
 
 							devices {
@@ -1447,15 +1460,6 @@ function Linux_Activator {
 							XXXXXXdevnode "^(ram|raw|loop|fd|md|dm-|sr|scd|st)[0-9]*"
 							XXXXXXdevnode "^hd[a-z]"
 							XXXXXXdevnode "^sda$"
-							XXXXXX# For Azure
-							XXXXXXdevice {
-							XXXXXXXXXXXXvendor  "NVME"
-							XXXXXXXXXXXXproduct "Microsoft NVMe Direct Disk"
-							XXXXXX}
-							XXXXXXdevice {
-							XXXXXXXXXXXXvendor  "Msft"
-							XXXXXXXXXXXX#product "*"
-							XXXXXX}
 							}
 
 							devices {
@@ -1509,21 +1513,11 @@ function Linux_Activator {
 						$multipathfile = (($multipathfile -split "`n") | ForEach-Object {$_.TrimStart()} | ForEach-Object {$_.replace("XXXXXX","         ")}) -join "`n"
 
 						$command = "test -f $($multipath_path) && echo true || echo false"
-						if($bLocalServer) {
-							$multipathconffileexists = Invoke-Expression $command
-						}
-						else {
-							$multipathconffileexists = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-						}
+						$multipathconffileexists = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 						if ($multipathconffileexists -match "true") {
 							$command = "cat $($multipath_path)"
-							if($bLocalServer) {
-								$multipathconf = Invoke-Expression $command
-							}
-							else {
-								$multipathconf = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-							}
+							$multipathconf = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 							
 							# 	Write the Multipath into the HTML file
 							InfoMessage "File - $($multipath_path) - Content:"
@@ -1532,48 +1526,32 @@ function Linux_Activator {
 							# Backup the orginal one 
 							$backup_multipath_file = $multipath_path.Replace(".conf","_backup.conf")
 							InfoMessage "Backing up file - $($multipath_path) ,to - $($backup_multipath_file)"
-							$command_multipath_backup = "sudo cp $($multipath_path) $($backup_multipath_file)"
-							if($bLocalServer) {
-								Invoke-Expression $command_multipath_backup
-							}
-							else {
-								plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command_multipath_backup
-							}
+							$command = "sudo cp $($multipath_path) $($backup_multipath_file)"
+							$command_multipath_backup_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						}
 						else {
 							BadMessage "multipath.conf file not found on $($multipath_path), we will create it"						
 						}
 
 						# $command_multipath_write = "sudo bash -c 'sudo echo '$($multipathfile)' > $($multipath_path)''"
-						$command_multipath_write = "echo '$multipathfile' | sudo tee $($multipath_path)"
+						$command = "echo '$multipathfile' | sudo tee $($multipath_path)"
 						InfoMessage "Setting the multipath.conf according to Silk's Best Practices"
-						if($bLocalServer) {
-							$command_multipath_write_output = Invoke-Expression $command_multipath_write
-						}
-						else {
-							$command_multipath_write_output = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command_multipath_write
-						}							
+						$command_multipath_write_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						GoodMessage "multipath.conf file was set with Silk's best practices"
 						
 						# If it was created from windows (Plink remotlly)
 						if ($PSPlatform -eq $Platfrom_Windows) {						
-							$command_multipath_write_dos2unix = "sudo sed -i -e 's/\r//g' $($multipath_path)"
-							$command_multipath_write_dos2unix_output = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command_multipath_write_dos2unix
+							$command = "sudo sed -i -e 's/\r//g' $($multipath_path)"
+							$command_multipath_write_dos2unix_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer							
 							GoodMessage "multipath.conf file was set as dos2unix, Removed ^M characters"
 						}
 
 						# Restart and Enable the multipathd
-						$multipath_command_enable  = "sudo systemctl enable multipathd.service"
-						$multipath_command_restart = "sudo systemctl restart multipathd"
-						if($bLocalServer) {
-							Invoke-Expression $multipath_command_enable
-							Invoke-Expression $multipath_command_restart
-						}
-						else {
-							plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $multipath_command_enable
-							plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $multipath_command_restart
-						}					
-						GoodMessage "multipathd service restarted and enabled"
+						$command  = "sudo systemctl enable multipathd.service"
+						$multipath_command_enable_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+						$command = "sudo systemctl restart multipathd"
+						$multipath_command_restart_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+						GoodMessage "multipathd service executed a restarted and enabled"
 					}
 					else {
 						InfoMessage "$MessageCounter - Skipping Linux Multipath Configuration"
@@ -1590,95 +1568,69 @@ function Linux_Activator {
 							# UDEV for 2002* 
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{device/timeout}=""300""'
-							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-2002*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{queue/scheduler}=""none""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-2002*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-2002*"", ATTR{queue/scheduler}=""none""'
 							
 							# UDEV for 280b*
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""280b*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""280b*"", ATTR{device/timeout}=""300""'
-							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-280b*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""280b*"", ATTR{queue/scheduler}=""none""'
+							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-280b*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-280b*"", ATTR{queue/scheduler}=""none""'
 						}
 						else {
 							# UDEV for 2002* 
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="noop"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{device/timeout}="300"'
-							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="noop"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="none"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="noop"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="none"'
 							
 							# UDEV for 280b*
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{queue/scheduler}="noop"'
-							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="280b*", ATTR{device/timeout}="300"'
-							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="noop"'							
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{device/timeout}="300"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{queue/scheduler}="none"'
+							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="noop"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-280b*", ATTR{queue/scheduler}="none"'
 						}
 						# Get /usr/lib/udev/rules.d/98-sdp-io.rules file from server
 						$udev_Silk_BP_data = $udev_Silk_BP_data | Out-String -Stream
 						
-						# Get multipath.conf file from server 
+						# Get udev.rules file from server 
 						$udev_file_path = "/usr/lib/udev/rules.d/98-sdp-io.rules"
 
 						$command = "test -f $($udev_file_path) && echo true || echo false"
-						if($bLocalServer) {
-							$ioschedulersfileexists = Invoke-Expression $command
-						}
-						else{
-							$ioschedulersfileexists = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-						}
+						$ioschedulersfileexists = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						
 						if($ioschedulersfileexists -match "true") {
-							$command = "cat /usr/lib/udev/rules.d/98-sdp-io.rules"
-							if($bLocalServer) {
-								$ioschedulersData = Invoke-Expression $command
-							}
-							else {
-								$ioschedulersData = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
-							}
+							$command = "sudo cat $udev_file_path"
+							$ioschedulersData = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 							# 	Write the 98-sdp-io.rules into the HTML file
-							InfoMessage "File - /usr/lib/udev/rules.d/98-sdp-io.rules - Content Before Overwrite:"
+							InfoMessage "File - $($udev_file_path) - Content Before Overwrite:"
 							handle_string_array_messages ($ioschedulersData |out-string).trim() "Data"
 
 							# Backup the orginal one 
 							$backup_udev_file = $udev_file_path.Replace(".rules","_backup.rules")
 							InfoMessage "Backing up file - $($udev_file_path) ,to - $($backup_udev_file)"
-							$command_udev_backup = "sudo cp $($udev_file_path) $($backup_udev_file)"
-							
-							if($bLocalServer) {
-								$command_udev_backup_output = Invoke-Expression $command_udev_backup
-							}
-							else {
-								$command_udev_backup_output = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command_udev_backup
-							}
+							$command = "sudo cp $($udev_file_path) $($backup_udev_file)"
+							$command_udev_backup_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						}
 						else {
-							BadMessage "98-sdp-io.rules not found on /usr/lib/udev/rules.d/98-sdp-io.rules, We will create it"
+							WarningMessage "98-sdp-io.rules not found on $($udev_file_path), We will create it"
 						}
 
 						# Overwrite the current schedulers values
 						$udev_Silk_BP_data = $udev_Silk_BP_data -join "`n"
-						$command_fill_udev = "echo '$udev_Silk_BP_data' | sudo tee $($udev_file_path)"
-						if($bLocalServer) {
-							$ioschedulersfileexists = Invoke-Expression $command_fill_udev
-						}
-						else {
-							$ioschedulersfileexists = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command_fill_udev
-						}
-						GoodMessage "io-schedulers.rules file was set with Silk's best practices"
+						$command = "echo '$udev_Silk_BP_data' | sudo tee $($udev_file_path)"
+						$ioschedulersfileexists = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+						GoodMessage "Silk io-schedulers.rules file was set with Silk's best practices"
 
 						#rewrites the io-schedulers.rules according to Silks BP
 						InfoMessage "Reloading the UDEV rules"
-						$command_reload_udev = 'sudo udevadm trigger && sudo udevadm settle'
-						if($bLocalServer) {
-							$ioschedulersfileexists = Invoke-Expression $command_reload_udev
-						}
-						else {
-							$ioschedulersfileexists = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command_reload_udev
-						}
+						$command = 'sudo udevadm trigger && sudo udevadm settle'
+						$command_reload_udev_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						GoodMessage "udevadm trigger && udevadm settle commands executed"
 					}
 					else {
@@ -1738,7 +1690,10 @@ else {
 	Set-Variable -Name OrigColor -Value $TempOrigColor -Option AllScope -Scope Script
 
 	# clear the console
-	clear-host
+	 clear-host
+
+	# Start time 
+	$bDate = Get-date
 
 	$MessageCurrentObject = "Silk Activator pre-Checking Section"
 
@@ -1828,6 +1783,16 @@ else {
 					}
 				}
 			}
+
+			# Begin and End Times
+			$eDate = Get-date
+			$tDate = New-TimeSpan -Start $bDate -End $eDate
+
+			# Add end and total time to HTML
+			$SDPBPHTMLBody += "<div id='host_space'>Validator Execution Time</div>"
+			InfoMessage "Time - Validator starting time is - $($bDate)"
+			InfoMessage "Time - Validator ending time is - $($eDate)"
+			InfoMessage "Time - Validator total time (Sec) - $($tDate.TotalSeconds)"
 
 			# Generate HTML Report File
 			InfoMessage "Creating HTML Report..."
