@@ -1,6 +1,6 @@
 <#
     ===========================================================================================================================================
-    Release version: 2.0.0.0
+    Release version: 2.0.0.2
     -------------------------------------------------------------------------------------------------------------------------------------------
     Maintained by:  Aviv.Cohen@Silk.US
     Organization:   Silk.us, Inc.
@@ -19,7 +19,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.0.0.0"
+[string]$SDP_Version = "2.0.0.2"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "DotC"
@@ -86,7 +86,7 @@ Function DataMessageBlock {
 	$SDPBPHTMLBody += "<div id='DataMessage'><p id='whitepreclass'>$args</p></div>"
 }
 
-Function WarningMessage {	
+Function WarningMessage {
 	$host.ui.RawUI.ForegroundColor = "Yellow"
 	Write-host "$($MessageCurrentObject) - [WARN] - $args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor
@@ -265,7 +265,7 @@ function Windows_Validator {
 			return $null
 		}
 
-		$allConnections = Get-IscsiTarget -NodeAddress $target.NodeAddress | Get-IscsiConnection -ErrorAction silentlycontinue 
+		$allConnections = Get-IscsiTarget -CimSession $CIMsession -NodeAddress $target.NodeAddress | Get-IscsiConnection -ErrorAction silentlycontinue 
 
 		if (!$allConnections -and $target) {
 			WarningMessage "iSCSI query failed (Function - Get-SilkSessions) - Plaese forcing MPIO claim update"
@@ -638,7 +638,7 @@ function Windows_Validator {
 								return $true
 							}
 						}
-					} | Select-Object SerialNumber,Number, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle}
+					} | Select-Object SerialNumber, Number, FriendlyName, LoadBalancePolicy, OperationalStatus, HealthStatus, Size, PartitionStyle}
 					$physicalDisks = invoke-Command -Session $pssessions -ScriptBlock {Get-PhysicalDisk}
 
 					# Create an empty array to store the combined data
@@ -646,17 +646,17 @@ function Windows_Validator {
 
 					# Loop through each disk and find its associated physical disk by SerialNumber,
 					# Foreach disk we find the PhysicalDiskStorageNodeView and Partition (if exist)
-					foreach ($disk in $disks) {
+					foreach ($disk in $disks | Sort-Object SerialNumber) {
 						$serialNumber = $disk.SerialNumber
 						$physicalDisk = $physicalDisks | Where-Object { $_.SerialNumber -eq $serialNumber }
 						$PhysicalDiskStorageNodeView = get-PhysicalDiskStorageNodeView -CimSession $CIMsession -PhysicalDisk $physicalDisk
 						$disknumber   = $null
 						$disknumber   = $disk.Number
-						
+						$driveLetter  = $null
+
 						if($disknumber)	{
 							$partitions  = Get-Partition -CimSession $CIMsession -DiskNumber $disknumber -ErrorAction SilentlyContinue
 							$partition   = $partitions | Where-Object {$_.AccessPaths -ne $null}
-							$driveLetter = $null
 							
 							if ($partition) {
 								$driveLetter = $partition.DriveLetter -join ","
@@ -685,7 +685,6 @@ function Windows_Validator {
 
 						# Print the MPIO Settings
 						InfoMessage "Silk Disks Settings Section :"
-						$server_diskInfo = $server_diskInfo | Sort-Object SerialNumber
 						$Server_KMNRIO_PD_out = ($server_diskInfo | Select-Object DeviceId,DiskNumber,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,SizeGB,DriveLetter,DiskStatus,PartitionStyle | Format-Table * -AutoSize | Out-String).Trim() 
 
 						# Print the MPIO into the html
@@ -693,13 +692,19 @@ function Windows_Validator {
 
 						# Run over the disks and verify that each disk is with LQD
 						foreach ($PD_Temp in $server_diskInfo)	{
-							# Check for each Individual if it LQD or not
-							if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth")	{
-								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+							# Check if the deviceid is not null.
+							if ($PD_Temp.DeviceId)	{
+								# Check for each Individual if it LQD or not
+								if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth")	{
+									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+								}
+								else {
+									BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)" 
+									$bFoundError = $True
+								}
 							}
 							else {
-								BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)" 
-								$bFoundError = $True
+								WarningMessage "SerialNumber - $($PD_Temp.SerialNumber) don't have disk DeviceId, skipping..." 
 							}
 						}
 					}
@@ -716,17 +721,24 @@ function Windows_Validator {
 						
 						# Run over the CTRL disks and verify that each disk is with Offline state
 						foreach ($PD_Temp in ($server_diskInfo | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
-							
-							# Check for each Individual if it Offline or not
-							if ($PD_Temp.DiskStatus -match "Offline") {
-								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Disk Status Offline)"
+							# Check if the deviceid is not null.
+							if ($PD_Temp.DeviceId)	{
+								# Check for each Individual if it Offline or not
+								if ($PD_Temp.DiskStatus -match "Offline") {
+									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Disk Status Offline)"
+								}
+								elseif ($PD_Temp.DiskStatus -match "Online") {
+									BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Disk Status Offline) but set to - $($PD_Temp.DiskStatus)"
+									$bFoundError = $True
+								}
+								else {
+									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not Online or Offline but set to - $($PD_Temp.DiskStatus), skipping..."
+								}
 							}
 							else {
-								BadMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Disk Status Offline) but set to - $($PD_Temp.DiskStatus)"
-								$bFoundError = $True
+								WarningMessage "SerialNumber - $($PD_Temp.SerialNumber) don't have disk DeviceId, skipping..." 
 							}
 						}
-						
 					}
 					else {
 						InfoMessage "No SILK SDP Disks found on the server, Could not verify the CTRL LU state"
@@ -784,7 +796,7 @@ function Windows_Validator {
 							}
 
 						}
-						else {							
+						else {
 							WarningMessage "The MSiSCSI service has not been started, Could not get Host IQN mame"
 						}
 					}
@@ -793,7 +805,7 @@ function Windows_Validator {
 					}
 					
 					$MessageCounter++
-					PrintDelimiter					
+					PrintDelimiter
 					
 					InfoMessage "$MessageCounter - Running validation for Silk iSCSI Sessions" 
 
@@ -805,13 +817,13 @@ function Windows_Validator {
 								handle_string_array_messages ($SilkSessions | Format-Table * -AutoSize | Out-String).Trim() "Data"
 							} else {
 								InfoMessage "The host don't have iSCSI sessions"
-							}								
+							}
 						}
-						else {							
+						else {
 							WarningMessage "The MSiSCSI service has not been started, Could not get Silk iSCSI Sessions"
 						}
 					}
-					else {						
+					else {
 						WarningMessage "The MSiSCSI service not found, Could not get Silk iSCSI Sessions"
 					}
 
@@ -2043,6 +2055,7 @@ else {
 					[string[]]$WindowsServerarray = @()
 					$WindowsServerString = read-host  ("Windows Server - Specify the Server name/s or IP adress/es to connect to (comma as a separation between them).`nPress enter if you want check local server with logon user")
 					$WindowsServerString = TrimHostNames $WindowsServerString
+					$script:HostList     = $WindowsServerString
 					$WindowsServerarray  = $WindowsServerString.split(",")
 
 					# Check the Windows servers, if it empty run this with local user

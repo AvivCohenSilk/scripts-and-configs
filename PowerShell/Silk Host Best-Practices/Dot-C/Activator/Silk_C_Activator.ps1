@@ -1,6 +1,6 @@
 <#
     ===========================================================================================================================================
-    Release version: 2.0.0.0
+    Release version: 2.0.0.2
     -------------------------------------------------------------------------------------------------------------------------------------------
     Maintained by:  Aviv.Cohen@Silk.US
     Organization:   Silk.us, Inc.
@@ -30,7 +30,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Activator begin of the script - Activate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.0.0"
+[string]$SDP_Version = "2.0.0.2"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "DotC"
@@ -331,18 +331,18 @@ function Windows_Activator {
 
 		# Loop through each disk and find its associated physical disk by SerialNumber,
 		# Foreach disk we find the PhysicalDiskStorageNodeView and Partition (if exist)
-		foreach ($disk in $disks) {
+		foreach ($disk in $disks | Sort-Object SerialNumber) {
 			$serialNumber = $disk.SerialNumber
 			$physicalDisk = $physicalDisks | Where-Object { $_.SerialNumber -eq $serialNumber }
 			$PhysicalDiskStorageNodeView = get-PhysicalDiskStorageNodeView -CimSession $cimsession_local -PhysicalDisk $physicalDisk
 			$disknumber   = $null
 			$disknumber   = $disk.Number
+			$driveLetter  = $null
 			
 			if($disknumber)	{
 				$partitions  = Get-Partition -CimSession $cimsession_local -DiskNumber $disknumber -ErrorAction SilentlyContinue
 				$partition   = $partitions | Where-Object {$_.AccessPaths -ne $null}
-				$driveLetter = $null
-				
+
 				if ($partition) {
 					$driveLetter = $partition.DriveLetter -join ","
 				}
@@ -740,8 +740,7 @@ function Windows_Activator {
 						# Check the PD count 
 						if($server_diskInfo.Count -ne 0) {
 							
-							# Sort the disk information and print it into html
-							$server_diskInfo      = $server_diskInfo | Sort-Object SerialNumber
+							# Sort the disk information and print it into html							
 							$server_diskInfo_out = ($server_diskInfo | Select-Object DeviceId,DiskNumber,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,SizeGB,DriveLetter,DiskStatus,PartitionStyle | Format-Table * -AutoSize | Out-String).Trim()
 
 							# Print the MPIO into the html
@@ -753,14 +752,20 @@ function Windows_Activator {
 									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
 								}
 								else {
-									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)"
-									$UniqueID = $PD_Temp.UniqueId.Trim()
-									# $MPIODisk = (invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -Namespace root\wmi -Class mpio_disk_info).driveinfo | Select-Object Name,SerialNumber})
-									$MPIODisk = (Get-CimInstance -CimSession $CIMsession -Namespace root\wmi -Class mpio_disk_info).DriveInfo | Select-Object Name,SerialNumber
-									$MPIODisk = $MPIODisk | Where-Object {$_.SerialNumber -eq $UniqueID}
-									$MPIODiskID = $MPIODisk.Name.Replace("MPIO Disk","")
-									(invoke-Command -Session $pssessions -Args $MPIODiskID -ScriptBlock {mpclaim -l -d $args[0] 4}) | out-null
-									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+									# Check if the physical disk have DeviceID, if not we skip it
+									if ($PD_Temp.DeviceId)	{
+										WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)"
+										$UniqueID = $PD_Temp.UniqueId.Trim()
+										# $MPIODisk = (invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -Namespace root\wmi -Class mpio_disk_info).driveinfo | Select-Object Name,SerialNumber})
+										$MPIODisk = (Get-CimInstance -CimSession $CIMsession -Namespace root\wmi -Class mpio_disk_info).DriveInfo | Select-Object Name,SerialNumber
+										$MPIODisk = $MPIODisk | Where-Object {$_.SerialNumber -eq $UniqueID}
+										$MPIODiskID = $MPIODisk.Name.Replace("MPIO Disk","")
+										(invoke-Command -Session $pssessions -Args $MPIODiskID -ScriptBlock {mpclaim -l -d $args[0] 4}) | out-null
+										GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+									}
+									else {
+										WarningMessage "SerialNumber - $($PD_Temp.SerialNumber) don't have disk DeviceId, skipping..." 
+									}
 								}
 							}
 						}
@@ -794,12 +799,20 @@ function Windows_Activator {
 							if ($PD_Temp.DiskStatus -match "Offline") {
 								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
 							}
-							else {
-								WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
-								Get-Disk -CimSession $CIMsession -SerialNumber $PD_Temp.SerialNumber | Where-Object IsOffline -Eq $False | Set-Disk -IsOffline $True 
-								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
+							elseif ($PD_Temp.DiskStatus -match "Online") {
+								if ($PD_Temp.DeviceId) {									
+									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
+									Get-Disk -CimSession $CIMsession -SerialNumber $PD_Temp.SerialNumber | Where-Object IsOffline -Eq $False | Set-Disk -IsOffline $True 
+									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
+								}
+								else {
+									WarningMessage "SerialNumber - $($PD_Temp.SerialNumber) don't have disk DeviceId, skipping..." 	
+								}
 							}
-						}
+							else {
+								WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not Online or Offline but set to - $($PD_Temp.DiskStatus), skipping..."
+							}
+						}						
 					}
 					else {
 						InfoMessage "No CTRL SILK SDP Disks found on the server"
