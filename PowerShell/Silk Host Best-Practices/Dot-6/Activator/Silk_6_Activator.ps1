@@ -1,6 +1,6 @@
 <#
     ===========================================================================================================================================
-    Release version: 3.0.0.1
+    Release version: 3.0.1.0
     -------------------------------------------------------------------------------------------------------------------------------------------
     Maintained by:  Aviv.Cohen@Silk.US
     Organization:   Silk.us, Inc.
@@ -30,7 +30,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Validator begin of the script - Activator #####################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "3.0.0.1"
+[string]$SDP_Version = "3.0.1.0"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "Dot6"
@@ -395,24 +395,24 @@ function VMware_Activator {
 				2 { PrintUsage 
 					return}
 				3 { 
-					$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop | Out-Null
+					$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop 
 					$HeadlineMessage = "<div id='Headline'>Running Activation for ESXi Cluster `"$($Cluster)`" from vCenter `"$($vCenter)`".</div>"
 					$vmhosts         = @(Get-VMHost -Server $vCenter -Location $Cluster)
 				}
 				4 { 
-					$VMwareConnect   = Connect-VIServer -Server $ESXHost -Credential $Credential -ErrorAction Stop | Out-Null
+					$VMwareConnect   = Connect-VIServer -Server $ESXHost -Credential $Credential -ErrorAction Stop 
 					$HeadlineMessage = "<div id='Headline'>Running Activation for ESXi host `"$($ESXHost)`" Only`".</div>"
 					$vmhosts         = @(Get-VMHost -Name $ESXHost)
 				}
 				5 {
-					$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop | Out-Null
+					$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop 
 					$HeadlineMessage = "<div id='Headline'>Running Activation for ESXi host `"$($ESXHost)`" located in vCenter `"$($vCenter)`".</div>"
 					$vmhosts         = @(Get-VMHost -Server $vCenter -Name $ESXHost)
 				}
 				6 { PrintUsage 
 					return}
 				7 {
-					$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop | Out-Null
+					$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop
 					$HeadlineMessage = "<div id='Headline'>Running Activation for ESXi Host `"$($ESXHost)`" located in ESXi Cluster(s) `"$($Cluster)`" from vCenter `"$($vCenter)`".</div>"
 					$vmhosts         = @(Get-VMHost -Server $vCenter -Location $Cluster -Name $ESXHost)
 				}
@@ -880,11 +880,11 @@ function Windows_Activator {
 			$PhysicalDiskStorageNodeView = get-PhysicalDiskStorageNodeView -CimSession $cimsession_local -PhysicalDisk $physicalDisk
 			$disknumber   = $null
 			$disknumber   = $disk.Number
-			
+			$driveLetter = $null
+
 			if($disknumber)	{
 				$partitions  = Get-Partition -CimSession $cimsession_local -DiskNumber $disknumber -ErrorAction SilentlyContinue
 				$partition   = $partitions | Where-Object {$_.AccessPaths -ne $null}
-				$driveLetter = $null
 				
 				if ($partition) {
 					$driveLetter = $partition.DriveLetter -join ","
@@ -1857,7 +1857,7 @@ function Linux_Activator {
 					$bUpdate = $true
 				}
 
-				if($bUpdate = $true) {
+				if($bUpdate) {
 					$command = "sudo yum -y update $($Pacakge)"
 					if($bLocalServer) {
 						$rpmInstall = Invoke-Expression $command
@@ -1897,7 +1897,7 @@ function Linux_Activator {
 					$bUpdate = $true
 				}
 
-				if($bUpdate = $true) {
+				if($bUpdate) {
 					$command = "sudo apt-get -y --only-upgrade install $($Pacakge)"					
 					if($bLocalServer) {
 						$rpmInstall = Invoke-Expression $command
@@ -2079,6 +2079,9 @@ function Linux_Activator {
 
 						switch($Linux_OS_Type) {
 							"rhel" {
+								if($Linux_OS_Version -ge 8)	{
+									$linuxtype = "rhel8"
+								}
 								if($Linux_OS_Version -ge 7)	{
 									$linuxtype = "rhel7"
 								}
@@ -2187,8 +2190,9 @@ function Linux_Activator {
 						write-host -ForegroundColor Black -BackgroundColor White "Option A - RedHat 5.x" 
 						write-host -ForegroundColor Black -BackgroundColor White "Option B - RedHat 6.x, CentOS 6.x, Oracle 6.x, Suse 11.x"
 						write-host -ForegroundColor Black -BackgroundColor White "Option C - RedHat 7.x, CentOS 7.x, CentOS 8.x, Suse 12.x"
-						write-host -ForegroundColor Black -BackgroundColor White "Option D - Debian 6.x, Ubuntu 12.x"
-						write-host -ForegroundColor Black -BackgroundColor White "Option E - Debian 7.x, Ubuntu 14.x"
+						write-host -ForegroundColor Black -BackgroundColor White "Option D - RedHat 8.x"
+						write-host -ForegroundColor Black -BackgroundColor White "Option E - Debian 6.x, Ubuntu 12.x"
+						write-host -ForegroundColor Black -BackgroundColor White "Option F - Debian 7.x, Ubuntu 14.x"
 
 						# Choose the Linux distributions 
 						$linuxtitle   = "Please select a Linux distribution"
@@ -2196,18 +2200,20 @@ function Linux_Activator {
 						$rhel5		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &A", "Configuring settings according to a RedHat 5 system best practices." 
 						$rhel6 		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &B", "Configuring settings according to a RedHat 6 system best practices."
 						$rhel7 		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &C", "Configuring settings according to a RedHat 7 system best practices."
-						$debian6 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &D", "Configuring settings according to a Debian 6 system best practices."
-						$debian7 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &E", "Configuring settings according to a Debian 7 system best practices."
+						$rhel8 		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &D", "Configuring settings according to a RedHat 8 system best practices."
+						$debian6 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &E", "Configuring settings according to a Debian 6 system best practices."
+						$debian7 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &F", "Configuring settings according to a Debian 7 system best practices."
 
-						$linuxoptions = [System.Management.Automation.Host.ChoiceDescription[]]($rhel5, $rhel6, $rhel7, $debian6, $debian7)
+						$linuxoptions = [System.Management.Automation.Host.ChoiceDescription[]]($rhel5, $rhel6, $rhel7, $rhel8, $debian6, $debian7)
 						$linuxresult  = $host.ui.PromptForChoice($linuxtitle, $linuxmessage, $linuxoptions,0) 
 
 						switch ($linuxresult) {
 							0 {$linuxtype = "rhel5"}
 							1 {$linuxtype = "rhel6"}
 							2 {$linuxtype = "rhel7"}
-							3 {$linuxtype = "debian6"}
-							4 {$linuxtype = "debian7"}
+							3 {$linuxtype = "rhel8"}
+							4 {$linuxtype = "debian6"}
+							5 {$linuxtype = "debian7"}
 						}
 					}
 					
@@ -2309,7 +2315,18 @@ function Linux_Activator {
 							
 						}
 
-						switch($linuxtype) {
+						switch ($linuxtype) {
+							"rhel8" {
+								if ($PSPlatform -eq $Platfrom_Windows) {
+									$multipathfile_data += 'XXXXXXXXXXXXpath_selector                 ""queue-length 0""'
+								}
+								else {
+									$multipathfile_data += 'XXXXXXXXXXXXpath_selector                 "queue-length 0"'
+								}
+								$multipathfile_data += 'XXXXXXXXXXXXfailback                      immediate'
+								$multipathfile_data += 'XXXXXXXXXXXXfast_io_fail_tmo              2'
+								$multipathfile_data += 'XXXXXXXXXXXXdev_loss_tmo                  3'
+							}
 							"rhel7" {
 								if ($PSPlatform -eq $Platfrom_Windows) {
 									$multipathfile_data += 'XXXXXXXXXXXXpath_selector                 ""queue-length 0""'
@@ -2484,6 +2501,17 @@ function Linux_Activator {
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="20024f400*",ATTR{queue/scheduler}="noop"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-20024f400*",ATTR{queue/scheduler}="noop"'
 						}
+
+						if($linuxtype -eq "rhel8") {
+							if ($PSPlatform -eq $Platfrom_Windows) {
+								$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""20024f400*"",ATTR{queue/scheduler}=""none""'
+								$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-20024f400*"",ATTR{queue/scheduler}=""none""'
+							}
+							else {
+								$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="20024f400*",ATTR{queue/scheduler}="none"'
+								$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-20024f400*",ATTR{queue/scheduler}="none"'
+							}
+						}
 						
 						switch -Wildcard ($linuxtype) 
 						{
@@ -2512,7 +2540,7 @@ function Linux_Activator {
 							}
 						}
 						
-						# Get /usr/lib/udev/rules.d/98-sdp-io.rules file from server
+						# Get /etc/udev/rules.d/62-io-schedulers.rules
 						$udev_Silk_BP_data = $udev_Silk_BP_data | Out-String -Stream
 						
 						# Get multipath.conf file from server 
@@ -2535,7 +2563,7 @@ function Linux_Activator {
 								$ioschedulersData = plink -ssh $Server -pw $linux_userpassword -l $linux_username -no-antispoof $command
 							}
 
-							# 	Write the 98-sdp-io.rules into the HTML file
+							# 	Write the 62-io-schedulers.rules into the HTML file
 							InfoMessage "File - $($udev_file_path) - Content Before Overwrite:"
 							handle_string_array_messages ($ioschedulersData |out-string).trim() "Data"
 
@@ -2552,7 +2580,7 @@ function Linux_Activator {
 							}
 						}
 						else {
-							BadMessage "98-sdp-io.rules not found on $($udev_file_path), We will create it"
+							BadMessage "62-sdp-io.rules not found on $($udev_file_path), We will create it"
 						}
 
 						# Overwrite the current schedulers values
@@ -2758,6 +2786,9 @@ function Linux_Activator {
 										$iSCSI_command_chkconfig = "sudo chkconfig --level 345 iscsi on"
 										$iSCSI_command_enable    = "sudo systemctl enable iscsi"
 										switch ($linuxtype)	{
+											"rhel8" {
+												$iSCSI_command_start   = "sudo systemctl start iscsid"
+											}
 											"rhel7" {
 												$iSCSI_command_start   = "sudo systemctl start iscsid"
 											}
