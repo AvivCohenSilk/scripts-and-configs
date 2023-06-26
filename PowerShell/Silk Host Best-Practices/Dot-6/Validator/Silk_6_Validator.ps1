@@ -594,7 +594,7 @@ function VMware_Validator {
 								
 								if($iSCSInicsData) {
 									$vSwitchName = $iSCSInicsData | Select-Object vSwitch
-									$vSwitch     = get-VirtualSwitch -VMHost $($vmhost.Name) -Name $vSwitchName | Select-Object Name,Mtu,Nic
+									$vSwitch     = get-VirtualSwitch -VMHost $($vmhost.Name) -Name $($vSwitchName.Vswitch) | Select-Object Name,Mtu,Nic
 									$physicalNic = $esxcli.network.nic.pauseParams.list.Invoke() | Select-Object NIC,PauseRX,PauseTX | where-object {$_.Nic -match $vSwitch.Nic }									
 									InfoMessage "Physical Nic and Flow-Control are:"
 									handle_string_array_messages ($physicalNic | Format-table * -AutoSize | Out-String).Trim() "Data"
