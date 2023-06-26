@@ -1,6 +1,6 @@
 <#
     ===========================================================================================================================================
-    Release version: 3.0.0.6
+    Release version: 3.0.1.0
     -------------------------------------------------------------------------------------------------------------------------------------------
     Maintained by:  Aviv.Cohen@Silk.US
     Organization:   Silk.us, Inc.
@@ -19,7 +19,7 @@
 ##################################### Silk Validator begin of the script - Validate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "3.0.0.6"
+[string]$SDP_Version = "3.0.1.0"
 
 # Checking the PS version and Edition
 [string]$ValidatorProduct  = "Dot6"
@@ -414,24 +414,24 @@ function VMware_Validator {
 					2 { PrintUsage 
 						return}
 					3 { 
-						$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop | Out-Null
+						$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop
 						$HeadlineMessage = "<div id='Headline'>Running validation for ESXi Cluster `"$($Cluster)`" from vCenter `"$($vCenter)`".</div>"
 						$vmhosts         = @(Get-VMHost -Server $vCenter -Location $Cluster)
 					}
 					4 { 
-						$VMwareConnect   = Connect-VIServer -Server $ESXHost -Credential $Credential -ErrorAction Stop | Out-Null
+						$VMwareConnect   = Connect-VIServer -Server $ESXHost -Credential $Credential -ErrorAction Stop 
 						$HeadlineMessage = "<div id='Headline'>Running validation for ESXi host `"$($ESXHost)`" Only`".</div>"
 						$vmhosts         = @(Get-VMHost -Name $ESXHost)
 					}
 					5 {
-						$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop | Out-Null
+						$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop 
 						$HeadlineMessage = "<div id='Headline'>Running validation for ESXi host `"$($ESXHost)`" located in vCenter `"$($vCenter)`".</div>"
 						$vmhosts         = @(Get-VMHost -Server $vCenter -Name $ESXHost)
 					}
 					6 { PrintUsage 
 						return}
 					7 {
-						$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop | Out-Null
+						$VMwareConnect   = Connect-VIServer -Server $vCenter -Credential $Credential -ErrorAction Stop 
 						$HeadlineMessage = "<div id='Headline'>Running validation for ESXi Host `"$($ESXHost)`" located in ESXi Cluster(s) `"$($Cluster)`" from vCenter `"$($vCenter)`".</div>"
 						$vmhosts         = @(Get-VMHost -Server $vCenter -Location $Cluster -Name $ESXHost)
 					}
@@ -550,20 +550,37 @@ function VMware_Validator {
 
 						# Validate Print iSCSI Configurtion that are related to kaminario target
 						# =====================================================================
-						InfoMessage "$MessageCounter - Running validation for iSCSI settings - Only print"
+						InfoMessage "$MessageCounter - Running validation for iSCSI settings - Only print data and check MTU via vmkping"
 						if($systemConnectivitytype -eq "iscsi") {
 							
 							# Connect to the EsxCli instance for the current host
 							$EsxCli = Get-EsxCli -VMHost $vmhost -V2
 
 							 # Get a list of all of the Silk Storage iSCSI targets
-							$targets = $esxcli.iscsi.adapter.target.portal.list.Invoke().where{$_.Target -Like "*kaminario*"}
+							$targets = $EsxCli.iscsi.adapter.target.portal.list.Invoke().where{$_.Target -Like "*kaminario*"}
 							InfoMessage "List of all of the Silk Storage iSCSI targets are:"
 							handle_string_array_messages ($targets | Format-table * -AutoSize | Out-String).Trim() "Data"
 
+							# Run over each target and check the MTU
+							$pingArg = $EsxCli.network.diag.ping.CreateArgs()
+							$pingArg.count = 3							
+							$pingArg.ipv4  = $true
+							$pingArg.size  = 8972
+							$pingArg.wait = .001
+							foreach($target in $targets) {
+								InfoMessage "target $($target.Target) IP is: - $($target.IP)"
+								$pingArg.host  = $target.IP
+								$pingResults = $EsxCli.network.diag.ping.Invoke($pingArg)
+								if($pingResults.Summary.Received -eq $pingArg.count) {
+									GoodMessage "Ping with MTU of Jambo frame working with Target IP $($target.IP)"
+								} else {
+									BadMessage "Ping with MTU of Jambo frame not working with Target IP $($target.IP) , Please check the network and MTU between ESXi server to SDP."
+								}
+							}
+
 							# Run over each target and get his internal infromation
-							foreach($target in $targets | select-object Adapter | Get-Unique | Sort-Object)
-							{	
+							foreach($target in $targets | select-object Adapter | Get-Unique | Sort-Object) {
+
 								# Get iSCSI Software Adaper in a variable
 								$iscsihba = $vmhost | Get-VMHostHba | Where-Object{($_.Model -eq "iSCSI Software Adapter") -and ($_.Device -eq $target.Adapter)}
 								InfoMessage "iSCSI Software Adaper is:"
@@ -575,10 +592,9 @@ function VMware_Validator {
 								InfoMessage "Port Binding Configuration is:"
 								handle_string_array_messages ($iSCSInicsData | Format-table * -AutoSize  |Out-String).Trim() "Data"
 								
-								if($iSCSInicsData)
-								{
+								if($iSCSInicsData) {
 									$vSwitchName = $iSCSInicsData | Select-Object vSwitch
-									$vSwitch     = get-VirtualSwitch -Name $vSwitchName | Select-Object Name,Mtu,Nic
+									$vSwitch     = get-VirtualSwitch -VMHost $($vmhost.Name) -Name $vSwitchName | Select-Object Name,Mtu,Nic
 									$physicalNic = $esxcli.network.nic.pauseParams.list.Invoke() | Select-Object NIC,PauseRX,PauseTX | where-object {$_.Nic -match $vSwitch.Nic }									
 									InfoMessage "Physical Nic and Flow-Control are:"
 									handle_string_array_messages ($physicalNic | Format-table * -AutoSize | Out-String).Trim() "Data"
@@ -1082,7 +1098,7 @@ function Windows_Validator {
 							GoodMessage "DiskTimeOutValue value is properly configured according to Silk's BP"
 						}
 						else { 
-							BadMessage "DiskTimeOutValueDiskTimeOutValue value is not set 45, Current Value is $($DiskTimeOutValue)"
+							BadMessage "DiskTimeOutValueDiskTimeOutValue value is not set 60, Current Value is $($DiskTimeOutValue)"
 							$bFoundError = $True
 						}
 						
@@ -1098,7 +1114,7 @@ function Windows_Validator {
 							GoodMessage "UseCustomPathRecoveryTime value is properly configured according to Silk's BP"
 						}
 						else { 
-							BadMessage "UseCustomPathRecoveryTime value is not set Enabled, Current Value is $($UseCustomPathRecoveryTime)"
+							BadMessage "UseCustomPathRecoveryTime value is not set Disabled, Current Value is $($UseCustomPathRecoveryTime)"
 							$bFoundError = $True
 						}
 
@@ -1106,7 +1122,7 @@ function Windows_Validator {
 							GoodMessage "CustomPathRecoveryTime value is properly configured according to Silk's BP"
 						}
 						else { 
-							BadMessage "CustomPathRecoveryTime value is not set 20, Current Value is $($CustomPathRecoveryTime)"
+							BadMessage "CustomPathRecoveryTime value is not set 40, Current Value is $($CustomPathRecoveryTime)"
 							$bFoundError = $True
 						}
 
@@ -1212,11 +1228,11 @@ function Windows_Validator {
 						$PhysicalDiskStorageNodeView = get-PhysicalDiskStorageNodeView -CimSession $CIMsession -PhysicalDisk $physicalDisk
 						$disknumber   = $null
 						$disknumber   = $disk.Number
+						$driveLetter  = $null
 						
 						if($disknumber)	{
 							$partitions  = Get-Partition -CimSession $CIMsession -DiskNumber $disknumber -ErrorAction SilentlyContinue
 							$partition   = $partitions | Where-Object {$_.AccessPaths -ne $null}
-							$driveLetter = $null
 							
 							if ($partition) {
 								$driveLetter = $partition.DriveLetter -join ","
@@ -2063,6 +2079,9 @@ function Linux_Validator {
 
 						switch($Linux_OS_Type) {
 							"rhel" {
+								if($Linux_OS_Version -ge 8)	{
+									$linuxtype = "rhel8"
+								}
 								if($Linux_OS_Version -ge 7)	{
 									$linuxtype = "rhel7"
 								}
@@ -2171,10 +2190,11 @@ function Linux_Validator {
 						Write-host -ForegroundColor Black -BackgroundColor yellow "Please select a Linux distribution"
 						Write-host -ForegroundColor Black -BackgroundColor yellow "-----------------------------------------------------"
 						write-host -ForegroundColor Black -BackgroundColor White "Option A - RedHat 5.x" 
-						write-host -ForegroundColor Black -BackgroundColor White "Option A - RedHat 6.x, CentOS 6.x, Oracle 6.x, Suse 11.x"
-						write-host -ForegroundColor Black -BackgroundColor White "Option B - RedHat 7.x, CentOS 7.x, CentOS 8.x, Suse 12.x"
-						write-host -ForegroundColor Black -BackgroundColor White "Option C - Debian 6.x, Ubuntu 12.x"
-						write-host -ForegroundColor Black -BackgroundColor White "Option D - Debian 7.x, Ubuntu 14.x"
+						write-host -ForegroundColor Black -BackgroundColor White "Option B - RedHat 6.x, CentOS 6.x, Oracle 6.x, Suse 11.x"
+						write-host -ForegroundColor Black -BackgroundColor White "Option C - RedHat 7.x, CentOS 7.x, CentOS 8.x, Suse 12.x"
+						write-host -ForegroundColor Black -BackgroundColor White "Option D - RedHat 8.x"
+						write-host -ForegroundColor Black -BackgroundColor White "Option E - Debian 6.x, Ubuntu 12.x"
+						write-host -ForegroundColor Black -BackgroundColor White "Option F - Debian 7.x, Ubuntu 14.x"
 
 						# Choose the Linux distributions 
 						$linuxtitle   = "Please select a Linux distribution"
@@ -2182,17 +2202,20 @@ function Linux_Validator {
 						$rhel5 		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &A", "Configuring settings according to a RedHat 5 system best practices."
 						$rhel6 		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &B", "Configuring settings according to a RedHat 6 system best practices."
 						$rhel7 		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &C", "Configuring settings according to a RedHat 7 system best practices."
-						$debian6 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &D", "Configuring settings according to a Debian 6 system best practices."
-						$debian7 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &E", "Configuring settings according to a Debian 7 system best practices."
+						$rhel8 		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &D", "Configuring settings according to a RedHat 8 system best practices."
+						$debian6 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &E", "Configuring settings according to a Debian 6 system best practices."
+						$debian7 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &F", "Configuring settings according to a Debian 7 system best practices."
 
-						$linuxoptions = [System.Management.Automation.Host.ChoiceDescription[]]($rhel5,$rhel6, $rhel7, $debian6, $debian7)
+						$linuxoptions = [System.Management.Automation.Host.ChoiceDescription[]]($rhel5, $rhel6, $rhel7, $rhel8, $debian6, $debian7)
 						$linuxresult  = $host.ui.PromptForChoice($linuxtitle, $linuxmessage, $linuxoptions,0) 
 						
 						switch ($linuxresult) {
-							0 {$linuxtype = "rhel6"}
-							1 {$linuxtype = "rhel7"}
-							2 {$linuxtype = "debian6"}
-							3 {$linuxtype = "debian7"}
+							0 {$linuxtype = "rhel5"}
+							1 {$linuxtype = "rhel6"}
+							2 {$linuxtype = "rhel7"}
+							3 {$linuxtype = "rhel8"}
+							4 {$linuxtype = "debian6"}
+							5 {$linuxtype = "debian7"}
 						}
 					}
 
@@ -2344,8 +2367,15 @@ function Linux_Validator {
 						switch -Wildcard ($linuxtype) {
 							'rhel*' {
 								switch ($linuxtype) {
+									#Rhel 8 params
+									rhel8  {
+										$path_selector_param    = '\"queue-length 0"' , "queue-length 0"
+										$failback_param         = '\bimmediate\b' , "immediate"
+										$fast_io_fail_tmo_param = '\b2\b' , "2"
+										$dev_loss_tmo_param     = '\b3\b' , "3"
+									}
 									#Rhel 7 params
-									rhel7 {
+									rhel7  {
 										$path_selector_param    = '\"queue-length 0"' , "queue-length 0"
 										$failback_param         = '\bimmediate\b' , "immediate"
 										$fast_io_fail_tmo_param = '\b2\b' , "2"
@@ -2501,6 +2531,13 @@ function Linux_Validator {
 										switch -Wildcard ($linuxtype) {
 											'rhel*' {
 												switch ($linuxtype) {
+													#Rhel 8 params
+													rhel8 {
+														if(ValidateAttrinuteInMpio -Mpio_Section $device -Parameter_name "path_selector" -Parameter_value_array $path_selector_param) {$bFoundError = $True}
+														if(ValidateAttrinuteInMpio -Mpio_Section $device -Parameter_name "failback" -Parameter_value_array $failback_param) {$bFoundError = $True}
+														if(ValidateAttrinuteInMpio -Mpio_Section $device -Parameter_name "fast_io_fail_tmo" -Parameter_value_array $fast_io_fail_tmo_param) {$bFoundError = $True}
+														if(ValidateAttrinuteInMpio -Mpio_Section $device -Parameter_name "dev_loss_tmo" -Parameter_value_array $dev_loss_tmo_param) {$bFoundError = $True}
+													}
 													#Rhel 7 params
 													rhel7 {
 														if(ValidateAttrinuteInMpio -Mpio_Section $device -Parameter_name "path_selector" -Parameter_value_array $path_selector_param) {$bFoundError = $True}
@@ -2563,6 +2600,10 @@ function Linux_Validator {
 					# Variables that need to be caheck 
 					$ID_SERIAL_scheduler_param      = '\"noop"' , "noop"
 					$DM_UUID_scheduler_param        = '\"noop"' , "noop"
+					
+					# Check in RHEL8
+					$ID_SERIAL_scheduler_param_none = '\"none"' , "none"
+					$DM_UUID_scheduler_param_none   = '\"none"' , "none"
 
 					switch -Wildcard ($linuxtype) {
 						'rhel*' {
@@ -2613,6 +2654,12 @@ function Linux_Validator {
 						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "ID_SERIAL}.*queue/max_sectors_kb" -Parameter_value_array $ID_SERIAL_max_sectors_kb_param) {$bFoundError = $True}
 						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param) {$bFoundError = $True}
 						if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "DM_UUID}.*queue/max_sectors_kb" -Parameter_value_array $DM_UUID_max_sectors_kb_param) {$bFoundError = $True}
+						
+						# Added the none checking in rhel8.
+						if($linuxtype -eq "rhel8") {
+							if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "ID_SERIAL}.*queue/scheduler" -Parameter_value_array $ID_SERIAL_scheduler_param_none) {$bFoundError = $True}
+							if(ValidateAttrinuteInIoschedulers -ioschedulers_Section $ioschedulers -Parameter_name "DM_UUID}.*queue/scheduler" -Parameter_value_array $DM_UUID_scheduler_param_none) {$bFoundError = $True}
+						}
 					}
 					else {
 						BadMessage "62-io-schedulers.rules not found on $($IOschedulersPath)"
