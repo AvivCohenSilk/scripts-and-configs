@@ -1,6 +1,6 @@
 <#
     ===========================================================================================================================================
-    Release version: 2.0.0.2
+    Release version: 2.0.0.4
     -------------------------------------------------------------------------------------------------------------------------------------------
     Maintained by:  Aviv.Cohen@Silk.US
     Organization:   Silk.us, Inc.
@@ -15,9 +15,9 @@
 
 <#
 *******Script Disclaimer:******************************************************************
-The Silk activator script is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, 
+The Silk activator script is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability,
 fitness for a particular purpose, and non-infringement.
-While the script was tested and worked in the Silk LAB environment, we recommend you execute it in a single host before using it for the production environment. 
+While the script was tested and worked in the Silk LAB environment, we recommend you execute it in a single host before using it for the production environment.
 We strongly recommend for the activator script is to execute during the following two scenarios:
 •   Upon first connectivity of Silk storage with a new host.
 •   For existing hosts using a maintenance window to avoid the possibility of data flow intervasion.
@@ -30,7 +30,7 @@ We strongly recommend for the activator script is to execute during the followin
 ##################################### Silk Activator begin of the script - Activate ########################################
 #region Validate Section
 # Configure general the SDP Version
-[string]$SDP_Version = "2.0.0.2"
+[string]$SDP_Version = "2.0.0.4"
 
 # Checking the PS version and Edition
 [string]$ActivatorProduct  = "DotC"
@@ -41,10 +41,10 @@ if($PSVersionTable.PSEdition -eq "Core" ) {
 		# Platform Section - Powershell Core 7 (Win32NT / Unix)
 		if(!($Platfrom_Windows)){Set-Variable Platfrom_Windows -option Constant -Scope Script -value "Win32NT"}
 		if(!($Platfrom_Linux)){Set-Variable Platfrom_Linux -option Constant -Scope Script -value "Unix"}
-		$PSPlatform = $PSVersionTable.Platform	
+		$PSPlatform = $PSVersionTable.Platform
 	}
 	else {
-		$bExitMenu = $true	
+		$bExitMenu = $true
 	}
 }
 # Must be desktop and on windows env
@@ -52,7 +52,7 @@ elseif($PSVersionTable.PSEdition -eq "Desktop") {
 	if(!($Platfrom_Windows)){Set-Variable Platfrom_Windows -option Constant -Scope Script -value "Win32NT"}
 	$PSPlatform = "Win32NT"
 }
-else {   
+else {
 	# PowerShell PSEdition is not Core or Desktop, Not supported.
 	$bExitMenu = $true
 }
@@ -68,10 +68,10 @@ Function PrintDescription {
         [string] $description
 	)
 
-	Write-host ""	
+	Write-host ""
 	$host.ui.RawUI.ForegroundColor = "Yellow"
 	Write-host "$description"
-	$host.ui.RawUI.ForegroundColor = $OrigColor	
+	$host.ui.RawUI.ForegroundColor = $OrigColor
 }
 #endregion
 
@@ -108,11 +108,11 @@ Function DataMessage {
 Function DataMessageBlock {
 	$host.ui.RawUI.ForegroundColor = "Cyan"
 	Write-host "$($MessageCurrentObject) - [Data] -`n$args"
-	$host.ui.RawUI.ForegroundColor = $OrigColor	
+	$host.ui.RawUI.ForegroundColor = $OrigColor
 	$SDPBPHTMLBody += "<div id='DataMessage'><p id='whitepreclass'>$args</p></div>"
 }
 
-Function WarningMessage {	
+Function WarningMessage {
 	$host.ui.RawUI.ForegroundColor = "Yellow"
 	Write-host "$($MessageCurrentObject) - [WARN] - $args"
 	$host.ui.RawUI.ForegroundColor = $OrigColor
@@ -130,14 +130,14 @@ Function PrintDelimiterServer {
 	Write-host "============================================="
 	$SDPBPHTMLBody += "<hr class='server'>"
 }
-#endregion 
+#endregion
 
 #region GenerateHTML
 # Function to generate the HTML report
 Function GenerateHTML {
 	# Set the output file location and name
 	$OutputPath     = $PSScriptRoot
-	$CurrentDate    = Get-Date	
+	$CurrentDate    = Get-Date
 	$OutputFilename = "SDP_$($ActivatorProduct)_$($HostType)_Activation_$($CurrentDate.Month)-$($CurrentDate.Day)-$($CurrentDate.Year)_$($CurrentDate.Hour)-$($CurrentDate.Minute)-$($CurrentDate.Second).html"
 	# Check the OS type and create the full path name
 	if ($PSPlatform -eq $Platfrom_Linux) {
@@ -152,8 +152,8 @@ Function GenerateHTML {
 	Write-Output "<html xmlns=`"http://www.w3.org/1999/xhtml`">" | Out-File -Append $OutputFile
 	Write-Output "<head>" | Out-File -Append $OutputFile
 	Write-Output "<title>Silk Best Practices Activator - $($CurrentDate.Month)-$($CurrentDate.Day)-$($CurrentDate.Year)_$($CurrentDate.Hour)-$($CurrentDate.Minute)-$($CurrentDate.Second)</title>" | Out-File -Append $OutputFile
-	
-	# Set the CSS stylesheet 
+
+	# Set the CSS stylesheet
 	Write-Output "<style>" | Out-File -Append $OutputFile
 	Write-Output "body {background-color: rgb(24, 24, 24); font-family: `"Lucida Console`"; font-size: 14px;}" | Out-File -Append $OutputFile
 	Write-Output "#BadMessage {color: red;  font-weight : bold;}" | Out-File -Append $OutputFile
@@ -166,17 +166,17 @@ Function GenerateHTML {
 	Write-Output "#host_space {font-size: 0; height: 20px; line-height: 0;}" | Out-File -Append $OutputFile
 	Write-Output "hr.server {border: 3px solid grey; border-radius: 3px;}" | Out-File -Append $OutputFile
 	Write-Output "</style>" | Out-File -Append $OutputFile
-	
+
 	# Close the HTML head
 	Write-Output "</head><body>" | Out-File -Append $OutputFile
-	
+
 	# Create the headline
 	Write-Output "<div id='Headline'>Silk Data Platform host activation script running version - $($SDP_Version).</div>" | Out-File -Append $OutputFile
 	Write-Output $HeadlineMessage | Out-File -Append $OutputFile
-	
+
 	# Write the HTML bpdy
 	Write-Output $SDPBPHTMLBody | Out-File -Append $OutputFile
-	
+
 	# Close HTML properly
 	Write-Output "</body>" | Out-File -Append $OutputFile
 	Write-Output "</html>" | Out-File -Append $OutputFile
@@ -184,13 +184,13 @@ Function GenerateHTML {
 
 	# Write the BP link before the end of the HTML file
 	$BP_Link = "https://support.silk.us/sys/folder/detail/7Os00000000002k00oU?retUrl=%2Fsys%2Ffolder%2Fdetail%2F7Os00000000002h00oU%3FretUrl%3D%252FSys%252Fdocument%252Findex"
-	Write-Output "<div id='Headline'><a href='$($BP_Link)' style='color: #8ebf42' target='_blank'>Link - Host Connectivity and Networking Best Practice Guide</a></div>" | Out-File -Append $OutputFile	
-	
+	Write-Output "<div id='Headline'><a href='$($BP_Link)' style='color: #8ebf42' target='_blank'>Link - Host Connectivity and Networking Best Practice Guide</a></div>" | Out-File -Append $OutputFile
+
 	# Write to the console
 	$host.ui.RawUI.ForegroundColor = "Cyan"
 	Write-Output "Summary report was written to $OutputFile"
 	Write-Output "Guide Link - Host Connectivity and Networking Best Practice Guide -  $($BP_Link)"
-	$host.ui.RawUI.ForegroundColor = $OrigColor	
+	$host.ui.RawUI.ForegroundColor = $OrigColor
 
 	# Opening the htmk file into default browser.
 	if ($PSPlatform -eq $Platfrom_Windows) {
@@ -204,11 +204,11 @@ Function GenerateHTML {
 function CheckAdminUserCrossPlatform {
 	if ($PSPlatform -eq $Platfrom_Linux) {
 		if ($(whoami) -eq "root") {
-			GoodMessage "Running as a root user on Linux OS" 
+			GoodMessage "Running as a root user on Linux OS"
 			return $True
 		}
 		else {
-			WarningMessage "The script is not running as root admin - but with user $(whoami)" 
+			WarningMessage "The script is not running as root admin - but with user $(whoami)"
 			return $true
 		}
 	}
@@ -218,16 +218,16 @@ function CheckAdminUserCrossPlatform {
 			return $False
 		}
 		else {
-			GoodMessage "Running as an Administrator, on Windows OS version - $((Get-CimInstance Win32_OperatingSystem).version)" 
+			GoodMessage "Running as an Administrator, on Windows OS version - $((Get-CimInstance Win32_OperatingSystem).version)"
 			return $True
 		}
 	}
 	else {
-		BadMessage "The platform is not Windows or Linux, Please rerun the activator script on one of those platforms" 
+		BadMessage "The platform is not Windows or Linux, Please rerun the activator script on one of those platforms"
 		return $False
 	}
 }
-#endregion 
+#endregion
 
 #region TrimHostNames
 # TrimHostNames Function - Helping to trim "," from windows and linux OS array
@@ -236,17 +236,17 @@ function TrimHostNames {
 	Param(
 		[string]$HostNames
 	)
-	
+
 	$HostNames = $HostNames.trim()
-	
+
 	if($HostNames[0] -eq ",") {
 		$HostNames = $HostNames.TrimStart(",")
 	}
-	
+
 	if($HostNames[-1] -eq ",") {
 		$HostNames = $HostNames.TrimEnd(",")
 	}
-	
+
 	return $HostNames.trim()
 }
 #endregion
@@ -270,11 +270,11 @@ Function handle_string_array_messages {
 
 #region User Selections Prompt For Choice
 # Get user selection
-Function UserSelections {    
+Function UserSelections {
 	param(
         [parameter(Mandatory)][string] $title,
         [parameter()][string] $defaultValue
-    )	
+    )
 
 	if ($defaultValue) {
 		$message = "$title - Would you like to configure $($title) to $($defaultValue)?"
@@ -286,7 +286,7 @@ Function UserSelections {
 	$yes     = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", "Configure $($title)."
 	$no      = New-Object System.Management.Automation.Host.ChoiceDescription "&No", "Skip $($title)."
 	$options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
-	$result  = $host.ui.PromptForChoice("", $message, $options, 0) 
+	$result  = $host.ui.PromptForChoice("", $message, $options, 0)
 	Write-host "---------------------------------------------------------------------------------------------------------"
 	switch ($result) {
 			0 {return $True}
@@ -299,9 +299,9 @@ Function UserSelections {
 ##################################### Activator Main functions ##################################################################
 #region Windows_Activator
 function Windows_Activator {
-	[cmdletbinding()] 
-	Param(	
-			[parameter()][String[]]$WinServerArray,	
+	[cmdletbinding()]
+	Param(
+			[parameter()][String[]]$WinServerArray,
 			[System.Management.Automation.PSCredential]$Credential = [System.Management.Automation.PSCredential]::Empty
 		)
 
@@ -338,7 +338,7 @@ function Windows_Activator {
 			$disknumber   = $null
 			$disknumber   = $disk.Number
 			$driveLetter  = $null
-			
+
 			if($disknumber)	{
 				$partitions  = Get-Partition -CimSession $cimsession_local -DiskNumber $disknumber -ErrorAction SilentlyContinue
 				$partition   = $partitions | Where-Object {$_.AccessPaths -ne $null}
@@ -347,7 +347,7 @@ function Windows_Activator {
 					$driveLetter = $partition.DriveLetter -join ","
 				}
 			}
-			
+
 			$combinedDisk = [PSCustomObject]@{
 				DeviceId      = $physicalDisk.DeviceId
 				DiskNumber    = $disknumber
@@ -368,7 +368,7 @@ function Windows_Activator {
 		return $server_diskInfo
 	}
 
-	# Start script initialization	
+	# Start script initialization
 	$MessageCurrentObject = "Windows Activator"
 	InfoMessage "Applying Silk BP on Windows Server/s"
 
@@ -386,7 +386,7 @@ function Windows_Activator {
 	PrintDelimiterServer
 
 	#connect with remote session to a windows server
-	Try {	
+	Try {
 		# Checked if the customer was not Specified server, meaning that he want to run it locally.
 		if ([string]::IsNullOrEmpty($WinServerArray)) {
 			# If we enter here, this is mean that the server array contain only one server and it's locally.
@@ -401,18 +401,54 @@ function Windows_Activator {
 		$HeadlineMessage
 		$HeadlineMessage = "<div id='Headline'>Running activiation for Windows host(s) `"$($WinServerArray)`".</div>"
 
+		# Set the default value of Apply all to false
+		$bApplyAllSettings = $False
+
+		# Check if the $WinServerArray is more then 1 server, If yes we ask "Apply All"
+		if($WinServerArray.Count -ge 2) {
+			PrintDescription "Apply All settings for all hosts?"
+			$bApplyAllSettings = UserSelections "Apply All" "Activate changes for all hosts?"
+
+			if ($bApplyAllSettings) {
+				# iSCSI Section
+				PrintDescription "Category: SAN Connectivity related.`nParameter type: The ISCSI settings are global parameters and may impact other attached storage arrays.`nDescription: The ISCSI settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
+				$ISCSI_Service = UserSelections "ISCSI" "Configuring MSiSCSI service"
+
+				# MPIO Section
+				PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: The MPIO framework settings are global parameters and may impact other attached storage arrays.`nDescription: The MPIO framework settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
+				$MPIO_Installation = UserSelections "MPIO Feature" "Installing Multipath-IO"
+				$MPIO_Configuration = UserSelections "MPIO Configuration" "configure MPIO parameters"
+
+				# Settings LQD Silk Disk
+				PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: Disk Load Balance Policy Settings.`nDescription: Setting the Silk Disks Load Balance Policy to Least Queue Depth (LQD)"
+				$MPIO_LoadBalancePolicy = UserSelections "MPIO" "Disk Load Balance Policy (LQD)"
+
+				# Settings CTRL Silk Disk OFFLINE
+				PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets"
+				$CTRL_LU_Offline = UserSelections "Management Lugical Unit" "CTRL Silk Disk"
+
+				# Windows TRIM/Unmap
+				PrintDescription "Category: Performance related.`nParameter type: TRIM / UNmap Disablie Disable Delete Notification.`nDescription: The TRIM functionality within Windows is controlled by a registry setting. By default, the setting is enabled which effectively enables auto-unmap."
+				$WinTrimUnmapRegistry = UserSelections "Trim / UNmap" "Disable Delete Notification Key"
+
+				# Defragmentation Scheduled Task
+				PrintDescription "Category: Performance related.`nParameter type: Disablie Disk Defragmentation Scheduled Task.`nDescription: In a Windows, Hyperv and even Windows server run as a virtual Machine on Cloud environments, it is recommended to Disable Disk Fragmentation Scheduled Task (ScheduledDefrag) to avoid performance issues"
+				$Defragmentation = UserSelections "Defragmentation" "Disable Windows Defragmentation Scheduled Task"
+			}
+		}
+
 		foreach ($WinServer in $WinServerArray)	{
 			PrintDelimiter
 
 			# Trim the server name
 			$WinServer = $WinServer.Trim()
-			
+
 			# initialization Windows Server for Messages Function
 			$MessageCurrentObject = $WinServer
-			
+
 			# Reboot checking boolean parameter
 			[boolean]$bNeedReboot = $false
-			
+
 			# Test coneection to the windows server, if no ping that is meaning that we could not reach it, script finish.
 			if (-not (Test-Connection -ComputerName $WinServer -Count 2 -Quiet)) {
 				WarningMessage "The windows Server $($WinServer) not responding to ping, skipping this server..."
@@ -437,455 +473,466 @@ function Windows_Activator {
 					}
 				}
 
-				# Reseting the counter message sections
-				[int]$MessageCounter = 1
-
-				# iSCSI Section
-				PrintDescription "Category: SAN Connectivity related.`nParameter type: The ISCSI settings are global parameters and may impact other attached storage arrays.`nDescription: The ISCSI settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
-				$ISCSI_Service = UserSelections "ISCSI" "Configuring MSiSCSI service"
-
-				# MPIO Section
-				PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: The MPIO framework settings are global parameters and may impact other attached storage arrays.`nDescription: The MPIO framework settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
-				$MPIO_Installation = UserSelections "MPIO Feature" "Installing Multipath-IO"
-				$MPIO_Configuration = UserSelections "MPIO Configuration" "configure MPIO parameters"
-
-				# Settings LQD Silk Disk
-				PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: Disk Load Balance Policy Settings.`nDescription: Setting the Silk Disks Load Balance Policy to Least Queue Depth (LQD)" 
-				$MPIO_LoadBalancePolicy = UserSelections "MPIO" "Disk Load Balance Policy (LQD)"
-
-				# Settings CTRL Silk Disk OFFLINE
-				PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets" 
-				$CTRL_LU_Offline = UserSelections "Management Lugical Unit" "CTRL Silk Disk"
-
-				# Windows TRIM/Unmap
-				PrintDescription "Category: Performance related.`nParameter type: TRIM / UNmap Disablie Disable Delete Notification.`nDescription: The TRIM functionality within Windows is controlled by a registry setting. By default, the setting is enabled which effectively enables auto-unmap."
-				$WinTrimUnmapRegistry = UserSelections "Trim / UNmap" "Disable Delete Notification Key"
-
-				# Defragmentation Scheduled Task
-				PrintDescription "Category: Performance related.`nParameter type: Disablie Disk Defragmentation Scheduled Task.`nDescription: In a Windows, Hyperv and even Windows server run as a virtual Machine on Cloud environments, it is recommended to Disable Disk Fragmentation Scheduled Task (ScheduledDefrag) to avoid performance issues"
-				$Defragmentation = UserSelections "Defragmentation" "Disable Windows Defragmentation Scheduled Task"
-
-				# Acitviation iSCSI Service according to BP
-				if($ISCSI_Service) {
-					InfoMessage "$MessageCounter - Running activation for iSCSI service"
-					# $MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
-					$MSiSCSI = Get-CimInstance -CimSession $CIMsession -Class Win32_Service -Filter "Name='MSiSCSI'"
-					
-					if($MSiSCSI) {
-						if ($MSiSCSI.State -match "Running") {
-							GoodMessage "MSiSCSI service is running"
-
-							# Checking if the service startup type is set to automatic
-							if ($MSiSCSI.StartMode -eq "Auto") {
-								GoodMessage "MSiSCSI service is set to start automatically"	
-							}
-							else {
-								WarningMessage "MSiSCSI service is not set to start automatically but to $($MSiSCSI.StartMode), Setting MSiSCSI service to start automatically"
-								(invoke-Command -Session $pssessions -ScriptBlock {(Set-Service -Name MSiSCSI -StartupType Automatic)}) | Out-Null
-								GoodMessage "Setting MSiSCSI service to start automatically complete"
-							} 
-						}
-						else { 
-							WarningMessage "MSiSCSI service is not running, Current state is - $($MSiSCSI.State), Starting MSiSCSI service and set to start automatically"
-							(invoke-Command -Session $pssessions -ScriptBlock {start-Service MSiSCSI}) | Out-Null
-							(invoke-Command -Session $pssessions -ScriptBlock {(Set-Service -Name MSiSCSI -StartupType Automatic)}) | Out-Null
-							GoodMessage "Starting MSiSCSI service and set to start automatically complete"
-						}
-					}
-					else { 
-						BadMessage "iSCSI service not found, Could not start or enable it"
-					}
+				# Check if we were able to connect via PSSession or CimSession
+				if ([string]::IsNullOrEmpty($pssessions)) {
+					WarningMessage "The windows Server $($WinServer) New-PSSession not able to establish (Check the WinRM in the remote server), skipping this server..."
+				}
+				elseif ([string]::IsNullOrEmpty($CIMsession)) {
+					WarningMessage "The windows Server $($WinServer) New-CimSession not able to establish (Check the WinRM in the remote server), skipping this server..."
 				}
 				else {
-					InfoMessage "$MessageCounter - Skipping Windows iSCSI service configuration"
-				}
+					# Reseting the counter message sections
+					[int]$MessageCounter = 1
 
-				$MessageCounter++
-				PrintDelimiter
-				
-				# MPIO Installation
-				if($MPIO_Installation) {
-					InfoMessage "$MessageCounter - Running activation for Multipath configuration (Windows Feature and Optional Feature)"
-					$MultipathIO = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
-					
-					# Multipath-IO Feature
-					if($MultipathIO) {
-						if ($MultipathIO.InstallState -eq "Installed") {
-							GoodMessage "Multipath value is Installed properly configured according to Silk's BP"
+					if (-not ($bApplyAllSettings)) {
+						# iSCSI Section
+						PrintDescription "Category: SAN Connectivity related.`nParameter type: The ISCSI settings are global parameters and may impact other attached storage arrays.`nDescription: The ISCSI settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
+						$ISCSI_Service = UserSelections "ISCSI" "Configuring MSiSCSI service"
 
-							# Multipath-IO Optional Feature
-							$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
-							if($MultipathIOFeature) {
-								if ($MultipathIOFeature.State -match "Enabled") {
-									GoodMessage "Multipath Windows Optional Feature is properly configured according to Silk's BP"
+						# MPIO Section
+						PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: The MPIO framework settings are global parameters and may impact other attached storage arrays.`nDescription: The MPIO framework settings are defined by Silk best practices and are set to work optimally with the Silk Data Platform."
+						$MPIO_Installation = UserSelections "MPIO Feature" "Installing Multipath-IO"
+						$MPIO_Configuration = UserSelections "MPIO Configuration" "configure MPIO parameters"
+
+						# Settings LQD Silk Disk
+						PrintDescription "Category: Multipath Microsoft DSM Connectivity related, High Availability related.`nParameter type: Disk Load Balance Policy Settings.`nDescription: Setting the Silk Disks Load Balance Policy to Least Queue Depth (LQD)"
+						$MPIO_LoadBalancePolicy = UserSelections "MPIO" "Disk Load Balance Policy (LQD)"
+
+						# Settings CTRL Silk Disk OFFLINE
+						PrintDescription "Category: SAN Connectivity related.`nParameter type: CTRL LU disk XXXXXX0000 Settings.`nDescription: Setting the CTRL Silk Disk Offline to avoid LU resets"
+						$CTRL_LU_Offline = UserSelections "Management Lugical Unit" "CTRL Silk Disk"
+
+						# Windows TRIM/Unmap
+						PrintDescription "Category: Performance related.`nParameter type: TRIM / UNmap Disablie Disable Delete Notification.`nDescription: The TRIM functionality within Windows is controlled by a registry setting. By default, the setting is enabled which effectively enables auto-unmap."
+						$WinTrimUnmapRegistry = UserSelections "Trim / UNmap" "Disable Delete Notification Key"
+
+						# Defragmentation Scheduled Task
+						PrintDescription "Category: Performance related.`nParameter type: Disablie Disk Defragmentation Scheduled Task.`nDescription: In a Windows, Hyperv and even Windows server run as a virtual Machine on Cloud environments, it is recommended to Disable Disk Fragmentation Scheduled Task (ScheduledDefrag) to avoid performance issues"
+						$Defragmentation = UserSelections "Defragmentation" "Disable Windows Defragmentation Scheduled Task"
+					}
+
+					# Acitviation iSCSI Service according to BP
+					if($ISCSI_Service) {
+						InfoMessage "$MessageCounter - Running activation for iSCSI service"
+						# $MSiSCSI = (invoke-Command -Session $pssessions -ScriptBlock {Get-WmiObject -Class Win32_Service -Filter "Name='MSiSCSI'"})
+						$MSiSCSI = Get-CimInstance -CimSession $CIMsession -Class Win32_Service -Filter "Name='MSiSCSI'"
+
+						if($MSiSCSI) {
+							if ($MSiSCSI.State -match "Running") {
+								GoodMessage "MSiSCSI service is running"
+
+								# Checking if the service startup type is set to automatic
+								if ($MSiSCSI.StartMode -eq "Auto") {
+									GoodMessage "MSiSCSI service is set to start automatically"
 								}
-								else { 
-									WarningMessage "Multipath Windows Optional Feature is not properly configured according to Silk's BP, The current state is $($MultipathIOFeature.State), Enable Windows Optional Feature starting..."
+								else {
+									WarningMessage "MSiSCSI service is not set to start automatically but to $($MSiSCSI.StartMode), Setting MSiSCSI service to start automatically"
+									(invoke-Command -Session $pssessions -ScriptBlock {(Set-Service -Name MSiSCSI -StartupType Automatic)}) | Out-Null
+									GoodMessage "Setting MSiSCSI service to start automatically complete"
+								}
+							}
+							else {
+								WarningMessage "MSiSCSI service is not running, Current state is - $($MSiSCSI.State), Starting MSiSCSI service and set to start automatically"
+								(invoke-Command -Session $pssessions -ScriptBlock {start-Service MSiSCSI}) | Out-Null
+								(invoke-Command -Session $pssessions -ScriptBlock {(Set-Service -Name MSiSCSI -StartupType Automatic)}) | Out-Null
+								GoodMessage "Starting MSiSCSI service and set to start automatically complete"
+							}
+						}
+						else {
+							BadMessage "iSCSI service not found, Could not start or enable it"
+						}
+					}
+					else {
+						InfoMessage "$MessageCounter - Skipping Windows iSCSI service configuration"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					# MPIO Installation
+					if($MPIO_Installation) {
+						InfoMessage "$MessageCounter - Running activation for Multipath configuration (Windows Feature and Optional Feature)"
+						$MultipathIO = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
+
+						# Multipath-IO Feature
+						if($MultipathIO) {
+							if ($MultipathIO.InstallState -eq "Installed") {
+								GoodMessage "Multipath value is Installed properly configured according to Silk's BP"
+
+								# Multipath-IO Optional Feature
+								$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
+								if($MultipathIOFeature) {
+									if ($MultipathIOFeature.State -match "Enabled") {
+										GoodMessage "Multipath Windows Optional Feature is properly configured according to Silk's BP"
+									}
+									else {
+										WarningMessage "Multipath Windows Optional Feature is not properly configured according to Silk's BP, The current state is $($MultipathIOFeature.State), Enable Windows Optional Feature starting..."
+										(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
+										GoodMessage "Enable Windows Optional Feature complete, server reboot required!"
+										$bNeedReboot = $true
+									}
+								}
+								else {
+									WarningMessage "Multipath Optional Feature is not enabled, Enable Windows Optional Feature starting..."
 									(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
 									GoodMessage "Enable Windows Optional Feature complete, server reboot required!"
 									$bNeedReboot = $true
 								}
 							}
-							else { 
-								WarningMessage "Multipath Optional Feature is not enabled, Enable Windows Optional Feature starting..."
+							else {
+								WarningMessage "Multipath is not installed, The current state is $($MultipathIO.InstallState), Install Windows Feature starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Install-WindowsFeature -name Multipath-IO}) | Out-Null
 								(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
-								GoodMessage "Enable Windows Optional Feature complete, server reboot required!"
+								GoodMessage "Install Windows Feature and Enable Windows Optional Feature complete, server reboot required!"
 								$bNeedReboot = $true
 							}
 						}
-						else { 
-							WarningMessage "Multipath is not installed, The current state is $($MultipathIO.InstallState), Install Windows Feature starting..."
+						else {
+							WarningMessage "Multipath Feature is not installed, Will install it and the Optional Features"
 							(invoke-Command -Session $pssessions -ScriptBlock {Install-WindowsFeature -name Multipath-IO}) | Out-Null
 							(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
 							GoodMessage "Install Windows Feature and Enable Windows Optional Feature complete, server reboot required!"
 							$bNeedReboot = $true
 						}
 					}
-					else { 
-						WarningMessage "Multipath Feature is not installed, Will install it and the Optional Features"
-						(invoke-Command -Session $pssessions -ScriptBlock {Install-WindowsFeature -name Multipath-IO}) | Out-Null
-						(invoke-Command -Session $pssessions -ScriptBlock {Enable-WindowsOptionalFeature -online -FeatureName MultipathIO -NoRestart}) | Out-Null
-						GoodMessage "Install Windows Feature and Enable Windows Optional Feature complete, server reboot required!"
-						$bNeedReboot = $true
+					else {
+						InfoMessage "$MessageCounter - Skipping Windows MPIO Installation (Windows Feature and Optional Feature)"
 					}
-				}
-				else {
-					InfoMessage "$MessageCounter - Skipping Windows MPIO Installation (Windows Feature and Optional Feature)"
-				}
 
-				$MessageCounter++
-				PrintDelimiter
+					$MessageCounter++
+					PrintDelimiter
 
-				# MPIO Settings and Confioguration
-				if($MPIO_Configuration) {
-					InfoMessage "$MessageCounter - Running activation for MPIO Configuration and additional Settings"
+					# MPIO Settings and Confioguration
+					if($MPIO_Configuration) {
+						InfoMessage "$MessageCounter - Running activation for MPIO Configuration and additional Settings"
 
-					# MPIO sections  Continully only if the Multipath-IO and MultipathIO Feature are installed and enabled
-					$MultipathIO        = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
-					$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
-					if (($MultipathIO.InstallState -match "Installed") -and  ($MultipathIOFeature.State -match "Enabled")) {
-						# MPIO Section 
-						$MPIO = $null
-						$MPIO = (Invoke-Command -Session $pssessions -ScriptBlock {Get-MPIOSetting})
-						$MPIO_out = ($MPIO | Out-String).Trim()
-						$MPIO = $MPIO | Out-String -Stream
-						$MPIO = $MPIO.Replace(" ", "")
-						
-						ForEach ($MPIOobject in $MPIO) {
-							switch ($($MPIOobject.Split(':')[0])) {
-								'PathVerificationState'     { $PathVerificationState = $($MPIOobject.Split(':')[1]) } # Enabled
-								'PathVerificationPeriod'    { $PathVerificationPeriod = $($MPIOobject.Split(':')[1]) } # 1 
-								'PDORemovePeriod'           { $PDORemovePeriod = $($MPIOobject.Split(':')[1]) } # 20
-								'RetryCount'                { $RetryCount = $($MPIOobject.Split(':')[1]) } # 3
-								'RetryInterval'             { $RetryInterval = $($MPIOobject.Split(':')[1]) } # 3
-								'UseCustomPathRecoveryTime' { $UseCustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) } # Enabled
-								'CustomPathRecoveryTime'    { $CustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) }	# 20
-								'DiskTimeoutValue'          { $DiskTimeOutValue = $($MPIOobject.Split(':')[1]) } # 100
+						# MPIO sections  Continully only if the Multipath-IO and MultipathIO Feature are installed and enabled
+						$MultipathIO        = (invoke-Command -Session $pssessions -ScriptBlock {Get-WindowsFeature -Name Multipath-IO})
+						$MultipathIOFeature = (invoke-Command -Session $pssessions -ScriptBlock {(get-WindowsOptionalFeature -Online -FeatureName MultipathIO)})
+						if (($MultipathIO.InstallState -match "Installed") -and  ($MultipathIOFeature.State -match "Enabled")) {
+							# MPIO Section
+							$MPIO = $null
+							$MPIO = (Invoke-Command -Session $pssessions -ScriptBlock {Get-MPIOSetting})
+							$MPIO_out = ($MPIO | Out-String).Trim()
+							$MPIO = $MPIO | Out-String -Stream
+							$MPIO = $MPIO.Replace(" ", "")
+
+							ForEach ($MPIOobject in $MPIO) {
+								switch ($($MPIOobject.Split(':')[0])) {
+									'PathVerificationState'     { $PathVerificationState = $($MPIOobject.Split(':')[1]) } # Enabled
+									'PathVerificationPeriod'    { $PathVerificationPeriod = $($MPIOobject.Split(':')[1]) } # 1
+									'PDORemovePeriod'           { $PDORemovePeriod = $($MPIOobject.Split(':')[1]) } # 20
+									'RetryCount'                { $RetryCount = $($MPIOobject.Split(':')[1]) } # 3
+									'RetryInterval'             { $RetryInterval = $($MPIOobject.Split(':')[1]) } # 3
+									'UseCustomPathRecoveryTime' { $UseCustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) } # Enabled
+									'CustomPathRecoveryTime'    { $CustomPathRecoveryTime = $($MPIOobject.Split(':')[1]) }	# 20
+									'DiskTimeoutValue'          { $DiskTimeOutValue = $($MPIOobject.Split(':')[1]) } # 100
+								}
 							}
-						}
 
-						# Print the MPIO Settings
-						InfoMessage "MPIO Settings Section"
+							# Print the MPIO Settings
+							InfoMessage "MPIO Settings Section"
 
-						# Print the MPIO into the html
-						handle_string_array_messages $MPIO_out "Data"
+							# Print the MPIO into the html
+							handle_string_array_messages $MPIO_out "Data"
 
-						# Checking the MSDSM supported hardware list
-						$MSDSMSupportedHW = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW -VendorId MSFT2005 -ProductId iSCSIBusType_0x9})
-						if ($MSDSMSupportedHW) {
-							GoodMessage "MPIO DSM value is properly configured according to Silk's BP"
+							# Checking the MSDSM supported hardware list
+							$MSDSMSupportedHW = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMSupportedHW -VendorId MSFT2005 -ProductId iSCSIBusType_0x9})
+							if ($MSDSMSupportedHW) {
+								GoodMessage "MPIO DSM value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "MPIO DSM is not set to VendorId:MSFT2005 and ProductId:iSCSIBusType_0x9, Adding MPIO iSCSI support (Claiming all the iSCSI attached storage for the MPIO) starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {New-MSDSMSupportedHW -VendorId MSFT2005 -ProductId iSCSIBusType_0x9}) | Out-Null
+								GoodMessage "Adding MPIO iSCSI support complete, server reboot required!"
+								$bNeedReboot = $true
+							}
+
+							if ($PathVerificationState -match "Enabled") {
+								GoodMessage "PathVerificationState value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "PathVerificationState is not Enabled, Current Value is $($PathVerificationState), Configure PathVerificationState parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathVerificationState Enabled }) | Out-Null
+								GoodMessage "Configure PathVerificationState parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($PathVerificationPeriod -match "1")	{
+								GoodMessage "PathVerificationPeriod value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "PathVerificationPeriod value is not set 1, Current Value is $($PathVerificationPeriod), Configure PathVerificationPeriod parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathVerificationPeriod 1 }) | Out-Null
+								GoodMessage "Configure PathVerificationPeriod parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($RetryCount -match "3")	{
+								GoodMessage "RetryCount value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "RetryCount value is not set 3, Current Value is $($RetryCount), Configure RetryCount parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewRetryCount 3}) | Out-Null
+								GoodMessage "Configure RetryCount parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($DiskTimeOutValue -match "100") {
+								GoodMessage "DiskTimeOutValue value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "DiskTimeOutValue value is not set 100, Current Value is $($DiskTimeOutValue),Configure DiskTimeOutValue parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {set-MPIOSetting -NewDiskTimeout 100}) | Out-Null
+								GoodMessage "Configure DiskTimeOutValue parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($RetryInterval -match "3") {
+								GoodMessage "RetryInterval value is properly configured according to Silk's BP."
+							}
+							else {
+								WarningMessage "RetryInterval value is not set 3, Current Value is $($RetryInterval), Configure RetryInterval parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewRetryInterval 3 }) | Out-Null
+								GoodMessage "Configure RetryInterval parameter completed, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($PDORemovePeriod -match "20") {
+								GoodMessage "PDORemovePeriod value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "PDORemovePeriod value is not set 20, Current Value is $($PDORemovePeriod), Configure PDORemovePeriod parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPDORemovePeriod 20}) | Out-Null
+								GoodMessage "Configure PDORemovePeriod parameter complete, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($UseCustomPathRecoveryTime -match "Enabled") {
+								GoodMessage "UseCustomPathRecoveryTime value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "UseCustomPathRecoveryTime value is not set Enabled, Current Value is $($UseCustomPathRecoveryTime), Configure UseCustomPathRecoveryTime parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -CustomPathRecovery Enabled}) | Out-Null
+								GoodMessage "Configure UseCustomPathRecoveryTime parameter complete, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							if ($CustomPathRecoveryTime -match "20") {
+								GoodMessage "CustomPathRecoveryTime value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "CustomPathRecoveryTime value is not set 20, Current Value is $($CustomPathRecoveryTime), Configure CustomPathRecoveryTime parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathRecoveryInterval 20}) | Out-Null
+								GoodMessage "Configure CustomPathRecoveryTime parameter complete, server reboot required"
+								$bNeedReboot = $true
+							}
+
+							# Load Balance and Failover Policy
+							$MSDSMGlobalDefaultLoadBalancePolicy = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMGlobalDefaultLoadBalancePolicy})
+							if($MSDSMGlobalDefaultLoadBalancePolicy) {
+								if($MSDSMGlobalDefaultLoadBalancePolicy -match "LQD") {
+									GoodMessage "Microsoft Global load balance policy value is properly configured according to Silk's BP"
+								}
+								else {
+									WarningMessage "Microsoft Global load balance policy is not set to LQD but set to - $($MSDSMGlobalDefaultLoadBalancePolicy), Configure MSDSMGlobalDefaultLoadBalancePolicy parameter starting..."
+									(invoke-Command -Session $pssessions -ScriptBlock {Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy LQD}) | Out-Null
+									GoodMessage "Configure MSDSMGlobalDefaultLoadBalancePolicy parameter complete"
+								}
+							}
+							else {
+								BadMessage "Could not get the state of server global load balance policy "
+							}
+
+							# MSDSMAutomaticClaimSettings - Gets settings for MSDSM automatically claiming SAN disks for MPIO.
+							$MSDSMAutomaticClaimSettings = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMAutomaticClaimSettings})
+							if($MSDSMAutomaticClaimSettings["iSCSI"]) {
+								GoodMessage "MSDSM automatically claiming SAN disks for MPIO value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "MSDSM automatically claiming SAN disks for MPIO value is not properly configured according to Silk's BP, Enable MSDSMAutomaticClaim for iSCSI parameter starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {Enable-MSDSMAutomaticClaim -BusType iSCSI -Confirm:$false}) | Out-Null
+								GoodMessage "Enable MSDSMAutomaticClaim for iSCSI parameter complete"
+							}
 						}
 						else {
-							WarningMessage "MPIO DSM is not set to VendorId:MSFT2005 and ProductId:iSCSIBusType_0x9, Adding MPIO iSCSI support (Claiming all the iSCSI attached storage for the MPIO) starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {New-MSDSMSupportedHW -VendorId MSFT2005 -ProductId iSCSIBusType_0x9}) | Out-Null
-							GoodMessage "Adding MPIO iSCSI support complete, server reboot required!"
-							$bNeedReboot = $true
-						}
-
-						if ($PathVerificationState -match "Enabled") {
-							GoodMessage "PathVerificationState value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "PathVerificationState is not Enabled, Current Value is $($PathVerificationState), Configure PathVerificationState parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathVerificationState Enabled }) | Out-Null
-							GoodMessage "Configure PathVerificationState parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
-						
-						if ($PathVerificationPeriod -match "1")	{
-							GoodMessage "PathVerificationPeriod value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "PathVerificationPeriod value is not set 1, Current Value is $($PathVerificationPeriod), Configure PathVerificationPeriod parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathVerificationPeriod 1 }) | Out-Null
-							GoodMessage "Configure PathVerificationPeriod parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						if ($RetryCount -match "3")	{
-							GoodMessage "RetryCount value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "RetryCount value is not set 3, Current Value is $($RetryCount), Configure RetryCount parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewRetryCount 3}) | Out-Null
-							GoodMessage "Configure RetryCount parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						if ($DiskTimeOutValue -match "100") {
-							GoodMessage "DiskTimeOutValue value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "DiskTimeOutValue value is not set 100, Current Value is $($DiskTimeOutValue),Configure DiskTimeOutValue parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {set-MPIOSetting -NewDiskTimeout 100}) | Out-Null
-							GoodMessage "Configure DiskTimeOutValue parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						if ($RetryInterval -match "3") {
-							GoodMessage "RetryInterval value is properly configured according to Silk's BP."
-						}
-						else { 
-							WarningMessage "RetryInterval value is not set 3, Current Value is $($RetryInterval), Configure RetryInterval parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewRetryInterval 3 }) | Out-Null
-							GoodMessage "Configure RetryInterval parameter completed, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						if ($PDORemovePeriod -match "20") {
-							GoodMessage "PDORemovePeriod value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "PDORemovePeriod value is not set 20, Current Value is $($PDORemovePeriod), Configure PDORemovePeriod parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPDORemovePeriod 20}) | Out-Null
-							GoodMessage "Configure PDORemovePeriod parameter complete, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						if ($UseCustomPathRecoveryTime -match "Enabled") {
-							GoodMessage "UseCustomPathRecoveryTime value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "UseCustomPathRecoveryTime value is not set Enabled, Current Value is $($UseCustomPathRecoveryTime), Configure UseCustomPathRecoveryTime parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -CustomPathRecovery Enabled}) | Out-Null
-							GoodMessage "Configure UseCustomPathRecoveryTime parameter complete, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						if ($CustomPathRecoveryTime -match "20") {
-							GoodMessage "CustomPathRecoveryTime value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "CustomPathRecoveryTime value is not set 20, Current Value is $($CustomPathRecoveryTime), Configure CustomPathRecoveryTime parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Set-MPIOSetting -NewPathRecoveryInterval 20}) | Out-Null
-							GoodMessage "Configure CustomPathRecoveryTime parameter complete, server reboot required"
-							$bNeedReboot = $true
-						}
-
-						# Load Balance and Failover Policy
-						$MSDSMGlobalDefaultLoadBalancePolicy = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMGlobalDefaultLoadBalancePolicy})
-						if($MSDSMGlobalDefaultLoadBalancePolicy) {
-							if($MSDSMGlobalDefaultLoadBalancePolicy -match "LQD") {
-								GoodMessage "Microsoft Global load balance policy value is properly configured according to Silk's BP"
-							}
-							else { 
-								WarningMessage "Microsoft Global load balance policy is not set to LQD but set to - $($MSDSMGlobalDefaultLoadBalancePolicy), Configure MSDSMGlobalDefaultLoadBalancePolicy parameter starting..."
-								(invoke-Command -Session $pssessions -ScriptBlock {Set-MSDSMGlobalDefaultLoadBalancePolicy -Policy LQD}) | Out-Null
-								GoodMessage "Configure MSDSMGlobalDefaultLoadBalancePolicy parameter complete"
-							}
-						}
-						else { 
-							BadMessage "Could not get the state of server global load balance policy " 
-						}
-
-						# MSDSMAutomaticClaimSettings - Gets settings for MSDSM automatically claiming SAN disks for MPIO.
-						$MSDSMAutomaticClaimSettings = (invoke-Command -Session $pssessions -ScriptBlock {Get-MSDSMAutomaticClaimSettings})
-						if($MSDSMAutomaticClaimSettings["iSCSI"]) {
-							GoodMessage "MSDSM automatically claiming SAN disks for MPIO value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "MSDSM automatically claiming SAN disks for MPIO value is not properly configured according to Silk's BP, Enable MSDSMAutomaticClaim for iSCSI parameter starting..."
-							(invoke-Command -Session $pssessions -ScriptBlock {Enable-MSDSMAutomaticClaim -BusType iSCSI -Confirm:$false}) | Out-Null
-							GoodMessage "Enable MSDSMAutomaticClaim for iSCSI parameter complete"
+							BadMessage "Because the MPIO is not fully installed and Enabled we can't continue with activate the MPIO Settings and additional configurations"
 						}
 					}
 					else {
-						BadMessage "Because the MPIO is not fully installed and Enabled we can't continue with activate the MPIO Settings and additional configurations"
+						InfoMessage "$MessageCounter - Skipping Windows MPIO configuration and additional Settings"
 					}
-				}
-				else {
-					InfoMessage "$MessageCounter - Skipping Windows MPIO configuration and additional Settings"
-				}
 
-				$MessageCounter++
-				PrintDelimiter
+					$MessageCounter++
+					PrintDelimiter
 
-				# Init empty server disk.
-				$server_diskInfo = @()
+					# Init empty server disk.
+					$server_diskInfo = @()
 
-				# Load Balance and Failover Policy for Individual Volumes
-				if($MPIO_LoadBalancePolicy)	{
-					InfoMessage "$MessageCounter - Running Activiation for Load Balance and Failover Policy for Individual Volumes"
+					# Load Balance and Failover Policy for Individual Volumes
+					if($MPIO_LoadBalancePolicy)	{
+						InfoMessage "$MessageCounter - Running Activiation for Load Balance and Failover Policy for Individual Volumes"
 
-					# Checking if the mpclaim found (if not -> mean that MPIO is not installed)
-					$mpclaim_installed = (invoke-Command -Session $pssessions -ScriptBlock {Get-Command mpclaim.exe})
+						# Checking if the mpclaim found (if not -> mean that MPIO is not installed)
+						$mpclaim_installed = (invoke-Command -Session $pssessions -ScriptBlock {Get-Command mpclaim.exe})
 
-					if($mpclaim_installed) {
-						
+						if($mpclaim_installed) {
+
+							# Check if the array of disk is empty, if yes, we fill it only once
+							if($server_diskInfo.Count -eq 0) {
+								$server_diskInfo = RemoteServerDiskInfo -pssessions_local $pssessions -cimsession_local $CIMsession
+							}
+
+							# Check the PD count
+							if($server_diskInfo.Count -ne 0) {
+
+								# Sort the disk information and print it into html
+								$server_diskInfo_out = ($server_diskInfo | Select-Object DeviceId,DiskNumber,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,SizeGB,DriveLetter,DiskStatus,PartitionStyle | Format-Table * -AutoSize | Out-String).Trim()
+
+								# Print the MPIO into the html
+								handle_string_array_messages $server_diskInfo_out "Data"
+
+								foreach ($PD_Temp in $server_diskInfo)	{
+									# Check for each Individual if it LQD or not
+									if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth") {
+										GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+									}
+									else {
+										# Check if the physical disk have DeviceID, if not we skip it
+										if ($PD_Temp.DeviceId)	{
+											WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)"
+											$UniqueID = $PD_Temp.UniqueId.Trim()
+											# $MPIODisk = (invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -Namespace root\wmi -Class mpio_disk_info).driveinfo | Select-Object Name,SerialNumber})
+											$MPIODisk = (Get-CimInstance -CimSession $CIMsession -Namespace root\wmi -Class mpio_disk_info).DriveInfo | Select-Object Name,SerialNumber
+											$MPIODisk = $MPIODisk | Where-Object {$_.SerialNumber -eq $UniqueID}
+											$MPIODiskID = $MPIODisk.Name.Replace("MPIO Disk","")
+											(invoke-Command -Session $pssessions -Args $MPIODiskID -ScriptBlock {mpclaim -l -d $args[0] 4}) | out-null
+											GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
+										}
+										else {
+											WarningMessage "SerialNumber - $($PD_Temp.SerialNumber) don't have disk DeviceId, skipping..."
+										}
+									}
+								}
+							}
+							else {
+								InfoMessage "No SILK SDP Disks found on the server"
+							}
+						}
+						else {
+							BadMessage "The mpclaim.exe not found. Check if MPIO Installed and Enabled"
+						}
+					}
+					else {
+						InfoMessage "$MessageCounter - Skipping Individual Disk MPIO configuration"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					if($CTRL_LU_Offline) {
+						InfoMessage "$MessageCounter - Running Activiation for CTRL Silk Disk"
+
 						# Check if the array of disk is empty, if yes, we fill it only once
 						if($server_diskInfo.Count -eq 0) {
 							$server_diskInfo = RemoteServerDiskInfo -pssessions_local $pssessions -cimsession_local $CIMsession
 						}
 
-						# Check the PD count 
 						if($server_diskInfo.Count -ne 0) {
-							
-							# Sort the disk information and print it into html							
-							$server_diskInfo_out = ($server_diskInfo | Select-Object DeviceId,DiskNumber,SerialNumber,FriendlyName,LoadBalancePolicy,CanPool,OperationalStatus,HealthStatus,SizeGB,DriveLetter,DiskStatus,PartitionStyle | Format-Table * -AutoSize | Out-String).Trim()
-
-							# Print the MPIO into the html
-							handle_string_array_messages $server_diskInfo_out "Data"
-
-							foreach ($PD_Temp in $server_diskInfo)	{
-								# Check for each Individual if it LQD or not
-								if ($PD_Temp.LoadBalancePolicy -match "Least Queue Depth") {
-									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
-								}
-								else {
-									# Check if the physical disk have DeviceID, if not we skip it
-									if ($PD_Temp.DeviceId)	{
-										WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (Least Queue Depth) but set to - $($PD_Temp.LoadBalancePolicy)"
-										$UniqueID = $PD_Temp.UniqueId.Trim()
-										# $MPIODisk = (invoke-Command -Session $pssessions -ScriptBlock {(Get-WmiObject -Namespace root\wmi -Class mpio_disk_info).driveinfo | Select-Object Name,SerialNumber})
-										$MPIODisk = (Get-CimInstance -CimSession $CIMsession -Namespace root\wmi -Class mpio_disk_info).DriveInfo | Select-Object Name,SerialNumber
-										$MPIODisk = $MPIODisk | Where-Object {$_.SerialNumber -eq $UniqueID}
-										$MPIODiskID = $MPIODisk.Name.Replace("MPIO Disk","")
-										(invoke-Command -Session $pssessions -Args $MPIODiskID -ScriptBlock {mpclaim -l -d $args[0] 4}) | out-null
-										GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (Least Queue Depth)"
-									}
-									else {
-										WarningMessage "SerialNumber - $($PD_Temp.SerialNumber) don't have disk DeviceId, skipping..." 
-									}
-								}
-							}
-						}
-						else {
-							InfoMessage "No SILK SDP Disks found on the server"
-						}
-					}
-					else {
-						BadMessage "The mpclaim.exe not found. Check if MPIO Installed and Enabled"
-					}
-				}
-				else {
-					InfoMessage "$MessageCounter - Skipping Individual Disk MPIO configuration"
-				}
-
-				$MessageCounter++
-				PrintDelimiter 
-
-				if($CTRL_LU_Offline) {
-					InfoMessage "$MessageCounter - Running Activiation for CTRL Silk Disk"
-
-					# Check if the array of disk is empty, if yes, we fill it only once
-					if($server_diskInfo.Count -eq 0) {
-						$server_diskInfo = RemoteServerDiskInfo -pssessions_local $pssessions -cimsession_local $CIMsession
-					}
-					
-					if($server_diskInfo.Count -ne 0) {
-						# Run over the CTRL disks and verify that each disk is Offline
-						foreach ($PD_Temp in ($server_diskInfo | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
-							# Check for each Individual if it offline or not
-							if ($PD_Temp.DiskStatus -match "Offline") {
-								GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
-							}
-							elseif ($PD_Temp.DiskStatus -match "Online") {
-								if ($PD_Temp.DeviceId) {									
-									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
-									Get-Disk -CimSession $CIMsession -SerialNumber $PD_Temp.SerialNumber | Where-Object IsOffline -Eq $False | Set-Disk -IsOffline $True 
+							# Run over the CTRL disks and verify that each disk is Offline
+							foreach ($PD_Temp in ($server_diskInfo | Where-Object {$_.SerialNumber.EndsWith("0000")})) {
+								# Check for each Individual if it offline or not
+								if ($PD_Temp.DiskStatus -match "Offline") {
 									GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
 								}
+								elseif ($PD_Temp.DiskStatus -match "Online") {
+									if ($PD_Temp.DeviceId) {
+										WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not properly configured according to Silk's BP (DiskStatus - Offline) but set to - $($PD_Temp.DiskStatus)"
+										Get-Disk -CimSession $CIMsession -SerialNumber $PD_Temp.SerialNumber | Where-Object IsOffline -Eq $False | Set-Disk -IsOffline $True
+										GoodMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) properly configured according to Silk's BP (DiskStatus - Offline)"
+									}
+									else {
+										WarningMessage "SerialNumber - $($PD_Temp.SerialNumber) don't have disk DeviceId, skipping..."
+									}
+								}
 								else {
-									WarningMessage "SerialNumber - $($PD_Temp.SerialNumber) don't have disk DeviceId, skipping..." 	
+									WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not Online or Offline but set to - $($PD_Temp.DiskStatus), skipping..."
 								}
 							}
-							else {
-								WarningMessage "Silk Disk (DiskNumber - $($PD_Temp.DiskNumber) / SerialNumber - $($PD_Temp.SerialNumber)) is not Online or Offline but set to - $($PD_Temp.DiskStatus), skipping..."
-							}
-						}						
-					}
-					else {
-						InfoMessage "No CTRL SILK SDP Disks found on the server"
-					}					
-				}
-				else{
-					InfoMessage "$MessageCounter - Skipping CTRL Silk Disk Settings"
-				}
-
-				$MessageCounter++
-				PrintDelimiter
-
-				if($WinTrimUnmapRegistry) {
-					# Check that TRIM/UNMAP Registry Key
-					InfoMessage "$MessageCounter - Running activation for Windows TRIM/UNMAP Registry Key..."
-					$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
-					if($WindowsrimUnampRegData) {					
-						if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
-							GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
 						}
 						else {
-							WarningMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification), Disabling DisableDeleteNotification, starting..." 
-							(invoke-Command -Session $pssessions -ScriptBlock {(Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification -Value 1)}) | Out-Null
-							GoodMessage "Windows Trim / UNMAP DisableDeleteNotification Task, complete"
+							InfoMessage "No CTRL SILK SDP Disks found on the server"
+						}
+					}
+					else{
+						InfoMessage "$MessageCounter - Skipping CTRL Silk Disk Settings"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					if($WinTrimUnmapRegistry) {
+						# Check that TRIM/UNMAP Registry Key
+						InfoMessage "$MessageCounter - Running activation for Windows TRIM/UNMAP Registry Key..."
+						$WindowsrimUnampRegData = (invoke-Command -Session $pssessions -ScriptBlock {Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification})
+						if($WindowsrimUnampRegData) {
+							if ($WindowsrimUnampRegData.DisableDeleteNotification -eq 1) {
+								GoodMessage "Trim / UNMAP registry key Disable Update Notification set properly (to 1)"
+							}
+							else {
+								WarningMessage "Trim / UNMAP registry key Disable Update Notification is not set properly (to 1) but to - $($WindowsrimUnampRegData.DisableDeleteNotification), Disabling DisableDeleteNotification, starting..."
+								(invoke-Command -Session $pssessions -ScriptBlock {(Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification -Value 1)}) | Out-Null
+								GoodMessage "Windows Trim / UNMAP DisableDeleteNotification Task, complete"
+							}
+						}
+						else {
+							InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
+						}
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					if($Defragmentation) {
+						InfoMessage "$MessageCounter - Running activation for Disk Defrag configuration"
+						$ScheduledDefragTask = (Get-ScheduledTask -CimSession $CIMsession -TaskName ScheduledDefrag)
+						if($ScheduledDefragTask) {
+							if($ScheduledDefragTask.State -match "disabled") {
+								GoodMessage " Scheduled Disk Fragmentation policy value is properly configured according to Silk's BP"
+							}
+							else {
+								WarningMessage "Scheduled Disk Fragmentation is not set to Disabled but to $($ScheduledDefragTask.State), Disabling ScheduledDefrag Task, starting..."
+								(Get-ScheduledTask -CimSession $CIMsession ScheduledDefrag | Disable-ScheduledTask -CimSession $CIMsession -ErrorAction SilentlyContinue) | Out-Null
+								GoodMessage "Disabling ScheduledDefrag Task, complete"
+							}
+						}
+						else {
+							WarningMessage "Scheduled Disk Fragmentation is not found on the windows Scheduled Task, Nothing to do"
 						}
 					}
 					else {
-						InfoMessage "No DisableDeleteNotification was found in registry under HKLM:\System\CurrentControlSet\Control\FileSystem location"
+						InfoMessage "$MessageCounter - Skipping Windows disk defragmentation deactivation"
+					}
+
+					$MessageCounter++
+					PrintDelimiter
+
+					# Remove the CIM session
+					if(![string]::IsNullOrEmpty($CIMsession.Id)) {
+						#Disconwnect from the server
+						Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
+						$CIMsession = $null
+						InfoMessage "Remove the CimSession To $($WinServer)"
+					}
+
+					# Remove the PSSession
+					if(![string]::IsNullOrEmpty($pssessions.Id)) {
+						#Remove the Session from the server
+						Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
+						$pssessions = $null
+						InfoMessage "Remove the PSSession To $($WinServer)"
 					}
 				}
-
-				$MessageCounter++
-				PrintDelimiter
-
-				if($Defragmentation) {
-					InfoMessage "$MessageCounter - Running activation for Disk Defrag configuration" 
-					$ScheduledDefragTask = (Get-ScheduledTask -CimSession $CIMsession -TaskName ScheduledDefrag)
-					if($ScheduledDefragTask) {
-						if($ScheduledDefragTask.State -match "disabled") {
-							GoodMessage " Scheduled Disk Fragmentation policy value is properly configured according to Silk's BP"
-						}
-						else { 
-							WarningMessage "Scheduled Disk Fragmentation is not set to Disabled but to $($ScheduledDefragTask.State), Disabling ScheduledDefrag Task, starting..." 
-							(Get-ScheduledTask -CimSession $CIMsession ScheduledDefrag | Disable-ScheduledTask -CimSession $CIMsession -ErrorAction SilentlyContinue) | Out-Null
-							GoodMessage "Disabling ScheduledDefrag Task, complete"
-						}
-					}
-					else { 
-						WarningMessage "Scheduled Disk Fragmentation is not found on the windows Scheduled Task, Nothing to do"
-					}
-				}
-				else {
-					InfoMessage "$MessageCounter - Skipping Windows disk defragmentation deactivation"
-				}
-
-				$MessageCounter++
-				PrintDelimiter
-
-				# Remove the CIM session
-				if(![string]::IsNullOrEmpty($CIMsession.Id)) {
-					#Disconwnect from the server
-					Get-CimSession -Id $($CIMsession.Id) | Remove-CimSession -Confirm:$false -ErrorAction SilentlyContinue
-					$CIMsession = $null
-					InfoMessage "Remove the CimSession To $($WinServer)"
-				}
-
-				# Remove the PSSession
-				if(![string]::IsNullOrEmpty($pssessions.Id)) {
-					#Remove the Session from the server
-					Get-PSSession -Id $($pssessions.Id) | Remove-PSSession -Confirm:$false -ErrorAction SilentlyContinue
-					$pssessions = $null
-					InfoMessage "Remove the PSSession To $($WinServer)"
-				}				
 			}
 
 			if($bNeedReboot) {
@@ -932,8 +979,8 @@ function Windows_Activator {
 #endregion
 
 #region Linux Activator as a subfunction
-function Linux_Activator {	
-	[cmdletbinding()] 
+function Linux_Activator {
+	[cmdletbinding()]
 	Param(
 		[parameter()][string[]]$ServerArray,
 		[System.Management.Automation.PSCredential]$Credential = [System.Management.Automation.PSCredential]::Empty
@@ -941,7 +988,7 @@ function Linux_Activator {
 
 	# Internal Sub Functions
 
-	#region InternalSubFunctions	
+	#region InternalSubFunctions
 	Function ValidatePlinkExecutable {
 		InfoMessage "Validate Plink Executable."
 		$Plink_Installed = $false
@@ -954,7 +1001,7 @@ function Linux_Activator {
 				$Plink_min_version =  0.74
 				$Plink_Source      = $Plink_command.Source
 				$Plink_release     = (&$plink_source -V | select-string "plink: Release").ToString().replace("plink: Release ","").trim()
-				
+
 				# Check if the version is only numbers
 				if($Plink_release -match "^[\d\.]+$") {
 					if($Plink_release -ge $Plink_min_version) {
@@ -977,7 +1024,7 @@ function Linux_Activator {
 		catch {
 			BadMessage "No Plink command found, please check that plink is installed."
 		}
-		
+
 		# Return true / false.
 		return $Plink_Installed
 	}
@@ -985,7 +1032,7 @@ function Linux_Activator {
 
 	#region Install_Package
 	Function Install_Package {
-		Param(		
+		Param(
 			[parameter()][string]$Pacakge,
 			[parameter()][string]$LinuxOSType
 		)
@@ -1009,13 +1056,13 @@ function Linux_Activator {
 
 			# Recheck again if the package was installed
 			Checking_Package $Pacakge $linuxtype
-		}		
+		}
 	}
 	#endregion
 
 	#region Checking_Package
 	Function Checking_Package {
-		Param(		
+		Param(
 			[parameter()][string]$Pacakge,
 			[parameter()][string]$LinuxOSType
 		)
@@ -1033,7 +1080,7 @@ function Linux_Activator {
 				$command = "sudo dpkg -s | grep $($Pacakge)"
 			}
 		}
-		
+
 		$rpmCheck = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
 		if ($rpmCheck) {
@@ -1060,7 +1107,7 @@ function Linux_Activator {
 		# Checking the MPIO and iSCSI Services on the machine
 		[string]$ServiceActive  = "active"
 		[string]$ServiceEnabled = "enabled"
-		
+
 		$command = "sudo systemctl is-active $($Service); sudo systemctl is-enabled $($Service)"
 		$CheckingServiceStatus = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 
@@ -1092,7 +1139,7 @@ function Linux_Activator {
 			[Parameter()][string]$LinuxUserPassword,
 			[Parameter()][bool]$UseLocalServer
 		)
-		
+
 		if ($UseLocalServer) {
 			$rtrValue = Invoke-Expression $Command
 		} else {
@@ -1152,10 +1199,10 @@ function Linux_Activator {
 		foreach ($Server in $ServerArray) {
 			# Trim the server
 			$Server = $Server.trim()
-			
-			# Init the name of the Linux server 
+
+			# Init the name of the Linux server
 			$MessageCurrentObject = $Server
-			
+
 			if (-not (Test-Connection -ComputerName $Server -Count 2 -Quiet)) {
 				BadMessage "Linux server $($Server) not responding to ping, skipping this server."
 			}
@@ -1208,7 +1255,7 @@ function Linux_Activator {
 						# Get the linux distro and version
 						$Linux_OS_Type          = $Linux_Distro_info[0].split($Splinter)[1].replace("""","").trim()
 						$Linux_OS_Version_print = $Linux_Distro_info[1].split($Splinter)[1].replace("""","").trim()
-						$Linux_OS_Version       = [int]$Linux_OS_Version_print.split(".")[0]						
+						$Linux_OS_Version       = [int]$Linux_OS_Version_print.split(".")[0]
 						InfoMessage "Linux distribution is: $($Linux_OS_Type)"
 						InfoMessage "Linux distribution version is: $($Linux_OS_Version_print)"
 
@@ -1308,12 +1355,12 @@ function Linux_Activator {
 							}
 						}
 					}
-					
+
 					if(-not ($linuxtype)) {
 						WarningMessage "Linux distribution is not found in the Linux OS (cat /etc/os-release | lsb_release -a)"
 						WarningMessage "Contact Silk Customer Support if you are using a different version of Oracle Linux, CentOS Linux, Ubuntu, Debian or SUSE Linux"
 						Start-Sleep -Seconds 3
-						
+
 						# Ask the customer what is the Linux OS Distro
 						Write-host -ForegroundColor Black -BackgroundColor yellow "Please select a Linux distribution"
 						Write-host -ForegroundColor Black -BackgroundColor yellow "-----------------------------------------------------"
@@ -1322,7 +1369,7 @@ function Linux_Activator {
 						write-host -ForegroundColor Black -BackgroundColor White "Option C - Debian 6.x, Ubuntu 12.x"
 						write-host -ForegroundColor Black -BackgroundColor White "Option D - Debian 7.x, Ubuntu 14.x"
 
-						# Choose the Linux distributions 
+						# Choose the Linux distributions
 						$linuxtitle   = "Please select a Linux distribution"
 						$linuxmessage = "Please select from the following options"
 						$rhel6 		  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &A", "Configuring settings according to a RedHat 6 system best practices."
@@ -1331,8 +1378,8 @@ function Linux_Activator {
 						$debian7 	  = New-Object System.Management.Automation.Host.ChoiceDescription "Option &D", "Configuring settings according to a Debian 7 system best practices."
 
 						$linuxoptions = [System.Management.Automation.Host.ChoiceDescription[]]($rhel6, $rhel7, $debian6, $debian7)
-						$linuxresult  = $host.ui.PromptForChoice($linuxtitle, $linuxmessage, $linuxoptions,0) 
-						
+						$linuxresult  = $host.ui.PromptForChoice($linuxtitle, $linuxmessage, $linuxoptions,0)
+
 						switch ($linuxresult) {
 							0 {$linuxtype = "rhel6"}
 							1 {$linuxtype = "rhel7"}
@@ -1391,13 +1438,13 @@ function Linux_Activator {
 					}
 
 					$MessageCounter++
-					PrintDelimiter 
+					PrintDelimiter
 
 					if($Multipath_Conf) {
 						# Get multipath.conf file from server
 						InfoMessage "$MessageCounter - Running the Activator for MPIO configuration"
 						$multipath_path = "/etc/multipath.conf"
-						
+
 						# Windows need to have two '"' each string
 						if ($PSPlatform -eq $Platfrom_Windows) {
 							$multipathfile = @('# Silk BP Configuration (/etc/multipath.conf)
@@ -1521,7 +1568,7 @@ function Linux_Activator {
 							XXXXXXproperty "(ID_SCSI_VPD|ID_WWN|ID_SERIAL)"
 							}')
 						}
-						
+
 						# $multipathfile = $multipathfile | Out-String -Stream
 						$multipathfile = (($multipathfile -split "`n") | ForEach-Object {$_.TrimStart()} | ForEach-Object {$_.replace("XXXXXX","         ")}) -join "`n"
 
@@ -1531,19 +1578,19 @@ function Linux_Activator {
 						if ($multipathconffileexists -match "true") {
 							$command = "cat $($multipath_path)"
 							$multipathconf = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
-							
+
 							# 	Write the Multipath into the HTML file
 							InfoMessage "File - $($multipath_path) - Content:"
 							handle_string_array_messages ($multipathconf |out-string).Trim() "Data"
 
-							# Backup the orginal one 
+							# Backup the orginal one
 							$backup_multipath_file = $multipath_path.Replace(".conf","_backup.conf")
 							InfoMessage "Backing up file - $($multipath_path) ,to - $($backup_multipath_file)"
 							$command = "sudo cp $($multipath_path) $($backup_multipath_file)"
 							$command_multipath_backup_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						}
 						else {
-							BadMessage "multipath.conf file not found on $($multipath_path), we will create it"						
+							BadMessage "multipath.conf file not found on $($multipath_path), we will create it"
 						}
 
 						# $command_multipath_write = "sudo bash -c 'sudo echo '$($multipathfile)' > $($multipath_path)''"
@@ -1551,11 +1598,11 @@ function Linux_Activator {
 						InfoMessage "Setting the multipath.conf according to Silk's Best Practices"
 						$command_multipath_write_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						GoodMessage "multipath.conf file was set with Silk's best practices"
-						
+
 						# If it was created from windows (Plink remotlly)
-						if ($PSPlatform -eq $Platfrom_Windows) {						
+						if ($PSPlatform -eq $Platfrom_Windows) {
 							$command = "sudo sed -i -e 's/\r//g' $($multipath_path)"
-							$command_multipath_write_dos2unix_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer							
+							$command_multipath_write_dos2unix_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 							GoodMessage "multipath.conf file was set as dos2unix, Removed ^M characters"
 						}
 
@@ -1574,17 +1621,17 @@ function Linux_Activator {
 					PrintDelimiter
 
 					if($ioscheduler_Conf) {
-						InfoMessage "$MessageCounter - Running the Activator for ioscheduler configuration"	
+						InfoMessage "$MessageCounter - Running the Activator for ioscheduler configuration"
 
 						$udev_Silk_BP_data = @('# Silk BP Configuration for 98-sdp-io.rules')
 						if ($PSPlatform -eq $Platfrom_Windows) {
-							# UDEV for 2002* 
+							# UDEV for 2002*
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{device/timeout}=""300""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""2002*"", ATTR{queue/scheduler}=""none""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-2002*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-2002*"", ATTR{queue/scheduler}=""none""'
-							
+
 							# UDEV for 280b*
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""280b*"", ATTR{queue/scheduler}=""noop""'
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{ID_SERIAL}==""280b*"", ATTR{device/timeout}=""300""'
@@ -1593,13 +1640,13 @@ function Linux_Activator {
 							$udev_Silk_BP_data += 'ACTION==""add|change"", SUBSYSTEM==""block"", ENV{DM_UUID}==""mpath-280b*"", ATTR{queue/scheduler}=""none""'
 						}
 						else {
-							# UDEV for 2002* 
+							# UDEV for 2002*
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="noop"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{device/timeout}="300"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="2002*", ATTR{queue/scheduler}="none"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="noop"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{DM_UUID}=="mpath-2002*", ATTR{queue/scheduler}="none"'
-							
+
 							# UDEV for 280b*
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{queue/scheduler}="noop"'
 							$udev_Silk_BP_data += 'ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_SERIAL}=="280b*", ATTR{device/timeout}="300"'
@@ -1609,13 +1656,13 @@ function Linux_Activator {
 						}
 						# Get /usr/lib/udev/rules.d/98-sdp-io.rules file from server
 						$udev_Silk_BP_data = $udev_Silk_BP_data | Out-String -Stream
-						
-						# Get udev.rules file from server 
+
+						# Get udev.rules file from server
 						$udev_file_path = "/usr/lib/udev/rules.d/98-sdp-io.rules"
 
 						$command = "test -f $($udev_file_path) && echo true || echo false"
 						$ioschedulersfileexists = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
-						
+
 						if($ioschedulersfileexists -match "true") {
 							$command = "sudo cat $udev_file_path"
 							$ioschedulersData = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
@@ -1624,8 +1671,8 @@ function Linux_Activator {
 							InfoMessage "File - $($udev_file_path) - Content Before Overwrite:"
 							handle_string_array_messages ($ioschedulersData |out-string).trim() "Data"
 
-							# Backup the orginal one 
-							$backup_udev_file = $udev_file_path.Replace(".rules","_backup.rules")
+							# Backup the orginal one
+							$backup_udev_file = $udev_file_path.Replace(".rules","_backup.backup")
 							InfoMessage "Backing up file - $($udev_file_path) ,to - $($backup_udev_file)"
 							$command = "sudo cp $($udev_file_path) $($backup_udev_file)"
 							$command_udev_backup_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
@@ -1639,6 +1686,12 @@ function Linux_Activator {
 						$command = "echo '$udev_Silk_BP_data' | sudo tee $($udev_file_path)"
 						$ioschedulersfileexists = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
 						GoodMessage "Silk io-schedulers.rules file was set with Silk's best practices"
+
+						# Removed ^M characters
+						InfoMessage "Removed ^M characters from udev files"
+						$command = "sudo sed -i -e 's/\r//g' $($udev_file_path)"
+						$command_multipath_write_dos2unix_output = Invoke-LinuxCommand -Command $command -Server $Server -LinuxUserName $linux_username -LinuxUserPassword $linux_userpassword -UseLocalServer $bLocalServer
+						GoodMessage "multipath.conf file was set as dos2unix, Removed ^M characters"
 
 						#rewrites the io-schedulers.rules according to Silks BP
 						InfoMessage "Reloading the UDEV rules"
@@ -1661,7 +1714,7 @@ function Linux_Activator {
 			$SDPBPHTMLBody += "<div id='host_space'></div>"
 		}
 	}
-	
+
 	catch {
 		# Get the exception messages
 		$ExceptionMessage = $_.Exception.Message
@@ -1670,11 +1723,11 @@ function Linux_Activator {
 		BadMessage "Caught exception during Linux Activator at line: $($line)"
 		BadMessage $ExceptionMessage
 	}
-	
+
 	Finally {
 		# Once all data is collected - output into HTML
 		$MessageCurrentObject = "Finished activating`n"
-		
+
 		PrintDelimiterServer
 	}
 }
@@ -1688,7 +1741,7 @@ if($bExitMenu) {
 	write-host "PSEdition is - $($PSVersionTable.PSEdition)"
 	Write-Warning -Message "PowerShell version failed in the prerequisites,`nPlease read pre-requisites section in Silk guide.`nGood Bye!"
 	Write-Warning -Message "`n`tPress any key to continue...";
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown'); 
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
 	return
 }
 else {
@@ -1705,7 +1758,7 @@ else {
 	# clear the console
 	 clear-host
 
-	# Start time 
+	# Start time
 	$bDate = Get-date
 
 	$MessageCurrentObject = "Silk Activator pre-Checking Section"
@@ -1715,11 +1768,11 @@ else {
 	InfoMessage "PowerShell Version is - $($PSVersionTable.PSVersion.Major)"
 	InfoMessage "PowerShell Edition is - $($PSVersionTable.PSEdition)"
 
-	if (CheckAdminUserCrossPlatform) {	
+	if (CheckAdminUserCrossPlatform) {
 		# Global Variables
 		[string]$HostType = ""
 
-		#region Script Choice Selection Host Type		
+		#region Script Choice Selection Host Type
 		$optionLinux   = New-Object System.Management.Automation.Host.ChoiceDescription '&Linux'  , 'Host Type: Linux'
 		$optionWindows = New-Object System.Management.Automation.Host.ChoiceDescription '&Windows', 'Host Type: Windows'
 		$optionExit    = New-Object System.Management.Automation.Host.ChoiceDescription "&Exit"   , "Exit"
@@ -1730,11 +1783,11 @@ else {
 		$optionmessage  = 'Choose your Host Type'
 		$HostTypeResult = $host.ui.PromptForChoice($optiontitle, $optionmessage, $optionsContainer, 2)
 		$bExit          = $False
-		
+
 		switch ($HostTypeResult) {
 			0 { $HostType = "Linux"   }
 			1 { $HostType = "Windows" }
-			2 { 
+			2 {
 				Write-Host "Exiting, Good Bye." -ForegroundColor Yellow
 				$bExit = $True
 				$HostType = "Exit"
@@ -1743,7 +1796,7 @@ else {
 		}
 		#endregion
 
-		if(-not($bExit)) { 
+		if(-not($bExit)) {
 			switch($HostType) {
 				# Linux
 				"Linux" {
@@ -1760,13 +1813,13 @@ else {
 					}
 					else {
 						$Credential = $host.ui.PromptForCredential("Silk BP credentials", "Please enter your Linux username and password.", "", "")
-						Linux_Activator $LinuxServerarray $Credential 
+						Linux_Activator $LinuxServerarray $Credential
 					}
 				}
-				
+
 				# Windows
 				"Windows" {
-					Write-Host -ForegroundColor Yellow "This script gets Windows servers as input and validates servers parameters according to Silk's best practices."	
+					Write-Host -ForegroundColor Yellow "This script gets Windows servers as input and validates servers parameters according to Silk's best practices."
 					[string]$WindowsServerString  = ""
 					[string[]]$WindowsServerarray = @()
 					$WindowsServerString = read-host  ("Windows Server - Specify the Server name/s or IP adress/es to connect to (comma as a separation between them).`nPress enter if you want check local server with logon user")
@@ -1791,7 +1844,7 @@ else {
 						}
 						else {
 							$Credential = $host.ui.PromptForCredential("Silk Windows BP credentials", "Please enter your Windows username and password.", "", "NetBiosUserName")
-							Windows_Activator $WindowsServerarray $Credential 
+							Windows_Activator $WindowsServerarray $Credential
 						}
 					}
 				}
